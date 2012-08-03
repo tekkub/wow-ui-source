@@ -411,6 +411,7 @@ function PaperDollFrame_OnLoad (self)
 	self:RegisterUnitEvent("UNIT_ATTACK_SPEED", "player");
 	self:RegisterUnitEvent("UNIT_MAXHEALTH", "player");
 	self:RegisterUnitEvent("UNIT_AURA", "player");
+	self:RegisterEvent("SPELL_POWER_CHANGED");
 	-- flyout settings
 	PaperDollItemsFrame.flyoutSettings = {
 		onClickFunc = PaperDollFrameItemFlyoutButton_OnClick,
@@ -507,13 +508,8 @@ function PaperDollFrame_OnEvent (self, event, ...)
 		else
 			PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "statCategoryOrder_2", "statCategoriesCollapsed_2", "player");
 		end
-	end
-
-	--The ranged slot has been "removed" from the game
-	--Under the hood it still exists, but we hide it from the player. We want it to appear as though ranged weapons go in the main hand
-	--so do some trickery to show and hide the range and main hand weapon slot buttons depending on what is equipped
-	if (event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_EQUIPMENT_CHANGED") then
-		UpdateRangedMainHandTrickery();
+	elseif ( event == "SPELL_POWER_CHANGED" ) then
+		self:SetScript("OnUpdate", PaperDollFrame_QueuedUpdate);
 	end
 end
 
@@ -895,13 +891,14 @@ function PaperDollFrame_SetResilience(statFrame, unit)
 		return;
 	end
 
-	local damageResilience = BreakUpLargeNumbers(GetCombatRating(COMBAT_RATING_RESILIENCE_PLAYER_DAMAGE_TAKEN));
-	local damageRatingBonus = GetCombatRatingBonus(COMBAT_RATING_RESILIENCE_PLAYER_DAMAGE_TAKEN);
-	PaperDollFrame_SetLabelAndText(statFrame, STAT_RESILIENCE, damageRatingBonus, 1);
+	local resilienceRating = BreakUpLargeNumbers(GetCombatRating(COMBAT_RATING_RESILIENCE_PLAYER_DAMAGE_TAKEN));
+	local ratingBonus = GetCombatRatingBonus(COMBAT_RATING_RESILIENCE_PLAYER_DAMAGE_TAKEN);
+	local damageReduction = ratingBonus + GetModResilienceDamageReduction();
+	PaperDollFrame_SetLabelAndText(statFrame, STAT_RESILIENCE, damageReduction, 1);
 	
-	statFrame.tooltip = HIGHLIGHT_FONT_COLOR_CODE..format(PAPERDOLLFRAME_TOOLTIP_FORMAT, STAT_RESILIENCE).." "..format("%.2F%%", damageRatingBonus)..FONT_COLOR_CODE_CLOSE;
-	statFrame.tooltip2 = RESILIENCE_TOOLTIP .. format(STAT_RESILIENCE_BASE_TOOLTIP, damageResilience, 
-									damageRatingBonus);
+	statFrame.tooltip = HIGHLIGHT_FONT_COLOR_CODE..format(PAPERDOLLFRAME_TOOLTIP_FORMAT, STAT_RESILIENCE).." "..format("%.2F%%", damageReduction)..FONT_COLOR_CODE_CLOSE;
+	statFrame.tooltip2 = RESILIENCE_TOOLTIP .. format(STAT_RESILIENCE_BASE_TOOLTIP, resilienceRating, 
+									ratingBonus);
 	statFrame:Show();
 end
 
@@ -1408,7 +1405,20 @@ function PaperDollFrame_SetRangedAttackPower(statFrame, unit)
 	local text = _G[statFrame:GetName().."StatText"];
 	local base, posBuff, negBuff = UnitRangedAttackPower(unit);
 
-	PaperDollFormatStat(RANGED_ATTACK_POWER, base, posBuff, negBuff, statFrame, text);
+	if (GetOverrideAPBySpellPower() ~= nil) then
+		local holySchool = 2;
+		-- Start at 2 to skip physical damage
+		spellPower = GetSpellBonusDamage(holySchool);		
+		for i=(holySchool+1), MAX_SPELL_SCHOOLS do
+			spellPower = min(spellPower, GetSpellBonusDamage(i));
+		end
+		spellPower = min(spellPower, GetSpellBonusHealing()) * GetOverrideAPBySpellPower();
+
+		PaperDollFormatStat(RANGED_ATTACK_POWER, spellPower, 0, 0, statFrame, text);
+	else
+		PaperDollFormatStat(RANGED_ATTACK_POWER, base, posBuff, negBuff, statFrame, text);
+	end
+
 	local totalAP = base+posBuff+negBuff;
 	statFrame.tooltip2 = format(RANGED_ATTACK_POWER_TOOLTIP, BreakUpLargeNumbers(max((totalAP), 0)/ATTACK_POWER_MAGIC_NUMBER));
 	local petAPBonus = ComputePetBonus( "PET_BONUS_RAP_TO_AP", totalAP );
@@ -1993,8 +2003,8 @@ function PaperDollFrame_SetExpertise(statFrame, unit)
 	local category = statFrame:GetParent().Category;
 
 	local expertise, offhandExpertise, rangedExpertise = GetExpertise();
-	expertise = format("%.2f%%", expertise);
-	offhandExpertise = format("%.2f%%", offhandExpertise);
+	expertise = format("%.2F%%", expertise);
+	offhandExpertise = format("%.2F%%", offhandExpertise);
 	rangedExpertise = format("%.2F%%", rangedExpertise);
 	local speed, offhandSpeed = UnitAttackSpeed(unit);
 	local text;
@@ -2198,16 +2208,6 @@ function CharacterSpellCritChance_OnEnter (self)
 	GameTooltip:Show();
 end
 
-function UpdateRangedMainHandTrickery()
-	if (GetInventoryItemID("player",INVSLOT_RANGED) ~= nil) then
-		CharacterRangedSlot:Show();
-		CharacterMainHandSlot:Hide();
-	else
-		CharacterRangedSlot:Hide();
-		CharacterMainHandSlot:Show();
-	end
-end
-
 function PaperDollFrame_OnShow (self)
 	CharacterStatsPane.initialOffsetY = 0;
 	CharacterFrameTitleText:SetText(UnitPVPName("player"));
@@ -2230,8 +2230,6 @@ function PaperDollFrame_OnShow (self)
 	SetPaperDollBackground(CharacterModelFrame, "player");
 	PaperDollBgDesaturate(1);
 	PaperDollSidebarTabs:Show();
-
-	UpdateRangedMainHandTrickery();
 end
  
 function PaperDollFrame_OnHide (self)

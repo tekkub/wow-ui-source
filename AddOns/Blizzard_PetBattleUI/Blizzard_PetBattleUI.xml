@@ -94,6 +94,7 @@
 					<Color r="0" g="1" b="0"/>
 				</Texture>
 				<FontString parentKey="Name" inherits="GameFontNormalSmall" justifyH="LEFT">
+					<Size x="130" y="12"/>
 					<Anchors>
 						<Anchor point="TOPLEFT" relativeKey="$parent.Icon" relativePoint="TOPRIGHT" x="0" y="-3"/>
 					</Anchors>
@@ -178,7 +179,7 @@
 				PetBattleUnitFrame_OnLoad(self);
 			</OnLoad>
 			<OnClick>
-				if ( C_PetBattles.GetHealth(self.petOwner, self.petIndex) ~= 0 ) then
+				if ( C_PetBattles.CanPetSwapIn(self:GetID()) ) then
 					C_PetBattles.ChangePet(self:GetID());
 					PetBattlePetSelectionFrame_Hide(PetBattleFrame.BottomFrame.PetSelectionFrame);
 				end
@@ -1367,7 +1368,9 @@
 									<OnLoad>
 										PetBattleActionButton_Initialize(self, LE_BATTLE_PET_ACTION_SKIP);
 									</OnLoad>
+									<OnEvent function="PetBattleActionButton_OnEvent"/>
 									<OnClick>
+										StaticPopup_Hide("PET_BATTLE_FORFEIT",nil);
 										C_PetBattles.SkipTurn();
 									</OnClick>
 								</Scripts>
@@ -1409,7 +1412,7 @@
 							</Layer>
 						</Layers>
 					</Frame>
-					<CheckButton parentKey="SwitchPetButton" motionScriptsWhileDisabled="true" inherits="PetBattleActionButtonTemplate">
+					<CheckButton parentKey="SwitchPetButton" motionScriptsWhileDisabled="true" inherits="PetBattleActionButtonTemplate" id="4">
 						<!--Anchored in code via the FlowFrame-->
 						<Layers>
 							<!--Layer level="OVERLAY">
@@ -1427,6 +1430,7 @@
 								self:SetFrameLevel(self:GetParent().FlowFrame:GetFrameLevel() + 1);
 							</OnLoad>
 							<OnClick>
+								StaticPopup_Hide("PET_BATTLE_FORFEIT",nil);
 								local selectionFrame = self:GetParent().PetSelectionFrame;
 								local battleState = C_PetBattles.GetBattleState();
 								local selectedActionType = C_PetBattles.GetSelectedAction();
@@ -1447,7 +1451,7 @@
 						</Scripts>
 						<CheckedTexture alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight"/>
 					</CheckButton>
-					<Button parentKey="CatchButton" motionScriptsWhileDisabled="true" inherits="PetBattleActionButtonTemplate">
+					<Button parentKey="CatchButton" motionScriptsWhileDisabled="true" inherits="PetBattleActionButtonTemplate" id="5">
 						<!--Anchored in code via the FlowFrame-->
 						<Scripts>
 							<OnLoad>
@@ -1532,6 +1536,9 @@
 		<Scripts>
 			<OnLoad function="PetBattleFrame_OnLoad"/>
 			<OnEvent function="PetBattleFrame_OnEvent"/>
+			<OnShow>
+				UIParent_ManageFramePositions();
+			</OnShow>
 		</Scripts>
 	</Frame>
 	<Frame name="PetBattlePrimaryUnitTooltip" inherits="PetBattleUnitTooltipTemplate"/>

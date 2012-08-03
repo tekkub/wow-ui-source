@@ -478,7 +478,11 @@ function PVPFrame_TabClicked(self)
 		PVPFrame.panel1:Show();
 		PVPFrameRightButton:Show();
 		PVPFrameLeftButton:SetText(BATTLEFIELD_JOIN);
-		PVPFrameLeftButton:Enable();
+		if (PVPHonorFrame.BGMapID and not CheckForMapInBlacklist(PVPHonorFrame.BGMapID)) then
+			PVPFrameLeftButton:Enable();
+		else
+			PVPFrameLeftButton:Disable();
+		end
 		PVPFrameCurrencyLabel:SetText(HONOR);
 		PVPFrameCurrencyIcon:SetTexture("Interface\\PVPFrame\\PVPCurrency-Honor-"..factionGroup);
 		PVPFrameCurrency.currencyID = HONOR_CURRENCY;
@@ -718,6 +722,7 @@ function PVPHonor_ButtonClicked(self)
 	self:GetParent().selectedButtonIndex = id;
 	self:GetParent().selectedIsWorldPvp = self.isWorldPVP;
 	self:GetParent().selectedPvpID = self.pvpID;
+	self:GetParent().BGMapID = self.BGMapID;
 	PVPHonorFrame_ResetInfo();
 	PVPHonorFrame_UpdateGroupAvailable();
 
@@ -1230,6 +1235,7 @@ function PVPConquestFrame_ButtonClicked(button)
 		PVPConquestFrame.topRatingText:Show();
 	end
 	PVPConquestFrame_Update(PVPConquestFrame);
+	PlaySound("igMainMenuOptionCheckBoxOn");
 end
 
 
@@ -2000,6 +2006,7 @@ function WarGameButtonHeader_OnClick(self)
 	end
 	WarGamesFrame.otherHeaderIndex = nil;	-- header location probably changed;
 	WarGamesFrame_Update();
+	PlaySound("igMainMenuOptionCheckBoxOn");
 end
 
 function WarGameButton_OnEnter(self)
@@ -2018,6 +2025,7 @@ function WarGameButton_OnClick(self)
 	local index = self:GetParent().index;
 	SetSelectedWarGameType(index);
 	WarGamesFrame_Update();
+	PlaySound("igMainMenuOptionCheckBoxOn");
 end
 
 function WarGameStartButton_Update()

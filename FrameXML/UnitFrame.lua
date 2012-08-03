@@ -4,7 +4,7 @@ PowerBarColor["MANA"] = { r = 0.00, g = 0.00, b = 1.00 };
 PowerBarColor["RAGE"] = { r = 1.00, g = 0.00, b = 0.00 };
 PowerBarColor["FOCUS"] = { r = 1.00, g = 0.50, b = 0.25 };
 PowerBarColor["ENERGY"] = { r = 1.00, g = 1.00, b = 0.00 };
---PowerBarColor["CHI"] = { r = 1.0, g = 1.0, b = 0 }; OBSOLETE
+PowerBarColor["LIGHT_FORCE"] = { r = 0.71, g = 1.0, b = 0.92 }; --light force is chi apparently
 PowerBarColor["RUNES"] = { r = 0.50, g = 0.50, b = 0.50 };
 PowerBarColor["RUNIC_POWER"] = { r = 0.00, g = 0.82, b = 1.00 };
 PowerBarColor["SOUL_SHARDS"] = { r = 0.50, g = 0.32, b = 0.55 };
@@ -20,7 +20,7 @@ PowerBarColor[0] = PowerBarColor["MANA"];
 PowerBarColor[1] = PowerBarColor["RAGE"];
 PowerBarColor[2] = PowerBarColor["FOCUS"];
 PowerBarColor[3] = PowerBarColor["ENERGY"];
---PowerBarColor[4] = PowerBarColor["CHI"]; OBSOLETE
+PowerBarColor[4] = PowerBarColor["LIGHT_FORCE"]; 
 PowerBarColor[5] = PowerBarColor["RUNES"];
 PowerBarColor[6] = PowerBarColor["RUNIC_POWER"];
 PowerBarColor[7] = PowerBarColor["SOUL_SHARDS"];
@@ -61,7 +61,7 @@ function UnitFrame_Initialize (self, unit, name, portrait, healthbar, healthtext
 	self:RegisterForClicks("LeftButtonUp", "RightButtonUp");
 	self:RegisterEvent("UNIT_NAME_UPDATE");
 	self:RegisterEvent("UNIT_DISPLAYPOWER");
-	self:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", unit);
+	self:RegisterEvent("UNIT_PORTRAIT_UPDATE");
 	if ( self.myHealPredictionBar ) then
 		self:RegisterUnitEvent("UNIT_MAXHEALTH", unit);
 		self:RegisterUnitEvent("UNIT_HEAL_PREDICTION", unit);
@@ -71,7 +71,6 @@ end
 function UnitFrame_SetUnit (self, unit, healthbar, manabar)
 	-- update unit events if unit changes
 	if ( self.unit ~= unit ) then
-		self:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", unit);
 		if ( self.myHealPredictionBar ) then
 			self:RegisterUnitEvent("UNIT_MAXHEALTH", unit);
 			self:RegisterUnitEvent("UNIT_HEAL_PREDICTION", unit);
@@ -94,10 +93,12 @@ function UnitFrame_SetUnit (self, unit, healthbar, manabar)
 end
 
 function UnitFrame_Update (self)
-	if ( self.overrideName ) then
-		self.name:SetText(GetUnitName(self.overrideName));
-	else
-		self.name:SetText(GetUnitName(self.unit));
+	if (self.name) then
+		if ( self.overrideName ) then
+			self.name:SetText(GetUnitName(self.overrideName));
+		else
+			self.name:SetText(GetUnitName(self.unit));
+		end
 	end
 	
 	UnitFramePortrait_Update(self);
@@ -132,6 +133,9 @@ function UnitFrame_OnEvent(self, event, ...)
 		elseif ( event == "UNIT_HEAL_PREDICTION" ) then
 			UnitFrameHealPredictionBars_Update(self);
 		end
+	elseif ( not arg1 and event == "UNIT_PORTRAIT_UPDATE" ) then
+		-- this is an update all portraits signal
+		UnitFramePortrait_Update(self);
 	end
 end
 

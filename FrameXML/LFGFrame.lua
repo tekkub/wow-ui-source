@@ -637,10 +637,6 @@ local RAID_BACKDROP_TABLE = {
 	edgeSize = 32,
 	insets = { left = 11, right = 12, top = 12, bottom = 11 }};
 
-function zGetLFGProposal()
-	return true, 492, 1, 4, "Greenstone Village", "QUEST", "DAMAGER", true, 0, 0, 1, true, false;
-end
-
 function LFGDungeonReadyPopup_Update()	
 	local proposalExists, id, typeID, subtypeID, name, texture, role, hasResponded, totalEncounters, completedEncounters, numMembers, isLeader = GetLFGProposal();
 	if ( not proposalExists ) then
@@ -803,6 +799,12 @@ function LFGDungeonReadyPopup_Update()
 		end
 
 		LFGDungeonReadyDialog_UpdateRewards(id, role);
+		LFGDungeonReadyDialogRewardsFrame:ClearAllPoints();
+		if ( subtypeID == LFG_SUBTYPEID_SCENARIO ) then
+			LFGDungeonReadyDialogRewardsFrame:SetPoint("BOTTOM", LFGDungeonReadyDialogRoleIcon, "BOTTOM", 0, 15);
+		else
+			LFGDungeonReadyDialogRewardsFrame:SetPoint("BOTTOMLEFT", LFGDungeonReadyDialogRoleIcon, "BOTTOMRIGHT", 19, 15);
+		end
 	end
 end
 
@@ -926,7 +928,7 @@ function LFGDungeonReadyDialog_UpdateInstanceInfo(name, completedEncounters, tot
 	local instanceInfoFrame = LFGDungeonReadyDialogInstanceInfoFrame;
 	instanceInfoFrame.name:SetFontObject(GameFontNormalLarge);
 	instanceInfoFrame.name:SetText(name);
-	if ( instanceInfoFrame.name:GetWidth() + 20 > LFGDungeonReadyDialog:GetWidth() ) then
+	if ( instanceInfoFrame.name:GetStringWidth() + 20 > LFGDungeonReadyDialog:GetWidth() ) then
 		instanceInfoFrame.name:SetFontObject(GameFontNormal);
 	end
 	
@@ -1130,7 +1132,7 @@ function LFGListUpdateHeaderEnabledAndLockedStates(dungeonList, enabledList, hid
 			local idState = enabledList[id];
 			local groupState = enabledList[groupID];
 			if ( idState ) then
-				if ( not groupState or groupState == 2 ) then
+				if ( not groupState or groupState == 2 ) then	--This code handles the 3 states of headers (enabled, disabled, someandsome)
 					enabledList[groupID] = 2;
 				elseif ( groupState == 0 or groupState == 1 ) then
 					enabledList[groupID] = 1;
@@ -1484,7 +1486,7 @@ function LFGInvitePopup_Update(inviter, roleTankAvailable, roleHealerAvailable, 
 	local tankButton = LFGInvitePopupRoleButtonTank;
 	local healerButton = LFGInvitePopupRoleButtonHealer;
 	local damagerButton = LFGInvitePopupRoleButtonDPS;
-	local availableRolesField = 0;
+	local availableRolesField = 0;	--Seems to be a ghetto bit-field
 	self.timeOut = STATICPOPUP_TIMEOUT;
 	LFGInvitePopupText:SetFormattedText(INVITATION, inviter);
 	-- tank

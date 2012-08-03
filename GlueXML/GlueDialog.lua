@@ -157,6 +157,23 @@ GlueDialogTypes["PARENTAL_CONTROL"] = {
 	end,
 }
 
+GlueDialogTypes["STREAMING_ERROR"] = {
+	text = DISCONNECTED,
+	button1 = DIALOG_HELP_MORE_INFO,
+	button2 = OKAY,
+	OnShow = function()
+		VirtualKeypadFrame:Hide();
+		SecurityMatrixLoginFrame:Hide();
+		StatusDialogClick();
+	end,
+	OnAccept = function()
+		LaunchURL(DISCONNECT_STREAMING_ERROR_URL);
+	end,
+	OnCancel = function()
+		StatusDialogClick();
+	end,
+}
+
 GlueDialogTypes["INVALID_NAME"] = {
 	text = CHAR_CREATE_INVALID_NAME,
 	button1 = OKAY,
@@ -249,7 +266,9 @@ GlueDialogTypes["CONFIRM_PAID_SERVICE"] = {
 	button1 = DONE,
 	button2 = CANCEL,
 	OnAccept = function()
-		CreateCharacter(CharacterCreateNameEdit:GetText());
+		-- need to get desired faction in case of pandaren doing faction change to another pandaren
+		-- this will be nil in any other case
+		CreateCharacter(CharacterCreateNameEdit:GetText(), PandarenFactionButtons_GetSelectedFaction());
 	end,
 	OnCancel = function()
 	end,

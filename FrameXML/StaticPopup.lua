@@ -104,17 +104,17 @@ StaticPopupDialogs["CONFIRM_GLYPH_PLACEMENT"] = {
 	text = "",
 	button1 = YES,
 	button2 = NO,
-	OnAccept = function (self) PlaceGlyphInSocket(self.data); end,
+	OnAccept = function (self) PlaceGlyphInSocket(self.data.id); end,
 	OnCancel = function (self)
 	end,
 	OnShow = function(self)
 		local name, count, _, _, cost = GetGlyphClearInfo();
 		if cost == 0 then
-			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT_NO_COST);
+			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT_NO_COST, self.data.name);
 		elseif count >= cost then
-			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT, GREEN_FONT_COLOR_CODE, cost, name);
+			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT, self.data.name, GREEN_FONT_COLOR_CODE, cost, name);
 		else
-			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT, RED_FONT_COLOR_CODE, cost, name);
+			self.text:SetFormattedText(CONFIRM_GLYPH_PLACEMENT, self.data.name, RED_FONT_COLOR_CODE, cost, name);
 			self.button1:Disable();
 		end
 	end,
@@ -970,8 +970,8 @@ StaticPopupDialogs["CONFIRM_REPORT_BATTLEPET_NAME"] = {
 	text = REPORT_BATTLEPET_NAME_CONFIRMATION,
 	button1 = ACCEPT,
 	button2 = CANCEL,
-	OnAccept = function(self)
-		ReportPlayer(PLAYER_REPORT_TYPE_BAD_BATTLEPET_NAME);		
+	OnAccept = function(self, name)
+		ReportPlayer(PLAYER_REPORT_TYPE_BAD_BATTLEPET_NAME, name);		
 	end,
 	timeout = 0,
 	whileDead = 1,
@@ -983,8 +983,8 @@ StaticPopupDialogs["CONFIRM_REPORT_PET_NAME"] = {
 	text = REPORT_PET_NAME_CONFIRMATION,
 	button1 = ACCEPT,
 	button2 = CANCEL,
-	OnAccept = function(self)
-		ReportPlayer(PLAYER_REPORT_TYPE_BAD_PET_NAME);		
+	OnAccept = function(self, name)
+		ReportPlayer(PLAYER_REPORT_TYPE_BAD_PET_NAME, name);		
 	end,
 	timeout = 0,
 	whileDead = 1,
@@ -1983,7 +1983,7 @@ StaticPopupDialogs["SET_BNFRIENDNOTE"] = {
 		BNSetFriendNote(FriendsFrame.NotesID, self.editBox:GetText());
 	end,
 	OnShow = function(self)
-		local presenceID, givenName, surname, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText = BNGetFriendInfoByID(FriendsFrame.NotesID);
+		local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText = BNGetFriendInfoByID(FriendsFrame.NotesID);
 		if ( noteText ) then
 			self.editBox:SetText(noteText);
 		end
@@ -3065,7 +3065,7 @@ StaticPopupDialogs["CONFIRM_BNET_REPORT"] = {
 };
 
 StaticPopupDialogs["CONFIRM_REMOVE_FRIEND"] = {
-	text = REMOVE_FRIEND_CONFIRMATION,
+	text = "%s",
 	button1 = ACCEPT,
 	button2 = CANCEL,
 	OnAccept = function(self, presenceID)
@@ -3213,7 +3213,7 @@ StaticPopupDialogs["CONFIRM_LAUNCH_URL"] = {
 	text = CONFIRM_LAUNCH_URL,
 	button1 = OKAY,
 	button2 = CANCEL,
-	OnAccept = function(self, data) LoadURLIndex(data); end,
+	OnAccept = function(self, data) LoadURLIndex(data.index, data.mapID); end,
 	hideOnEscape = 1,
 	timeout = 0,
 }

@@ -499,8 +499,15 @@ function LevelUpDisplay_AddBattlePetLevelUpEvent(self, activePlayer, activePetSl
 	end
 
 	local petID = C_PetJournal.GetPetLoadOutInfo(activePetSlot);
+	if (not petID) then
+		return;
+	end
+	
 	local speciesID, customName, petLevel, xp, maxXp, displayID, name, petIcon = C_PetJournal.GetPetInfoByPetID(petID);
-
+	if (not speciesID) then
+		return;
+	end
+	
 	table.insert(self.unlockList, 
 		{ 
 		entryType = "petlevelup", 
@@ -587,6 +594,7 @@ function LevelUpDisplay_OnShow(self)
 				self.challengeModeBits.MedalIcon:Hide();
 				self.challengeModeBits.BottomFiligree:Hide();
 			end
+			PlaySound("UI_Challenges_NewRecord");
 			LevelUpDisplay:SetPoint("TOP", 0, -190);
 			playAnim = self.challengeModeFrame.challengeComplete;
 		else
@@ -671,6 +679,7 @@ function LevelUpDisplay_AnimStep(self, fast)
 		self.spellFrame.rarityMiddleHuge:SetText("");
 		self.spellFrame.rarityIcon:Hide();
 		self.spellFrame.rarityValue:SetText("");
+		self.spellFrame.rarityValue:Hide();
 		
 		if (not spellInfo.entryType or
 			spellInfo.entryType == "spell" or
@@ -703,6 +712,7 @@ function LevelUpDisplay_AnimStep(self, fast)
 				self.spellFrame.rarityIcon:Show();
 				self.spellFrame.rarityValue:SetText(_G["BATTLE_PET_BREED_QUALITY"..spellInfo.quality]);
 				self.spellFrame.rarityValue:SetTextColor(ITEM_QUALITY_COLORS[spellInfo.quality-1].r, ITEM_QUALITY_COLORS[spellInfo.quality-1].g, ITEM_QUALITY_COLORS[spellInfo.quality-1].b);
+				self.spellFrame.rarityValue:Show();
 			end
 			self.spellFrame.showAnim:Play();
 		end

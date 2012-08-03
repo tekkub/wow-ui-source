@@ -270,7 +270,7 @@ function QuestLog_OnEvent(self, event, ...)
 				TriggerTutorial(11);
 			end
 		end
-		if ( AUTO_QUEST_PROGRESS == "1" and 
+		if ( AUTO_QUEST_WATCH == "1" and 
 			GetNumQuestLeaderBoards(arg1) > 0 and 
 			GetNumQuestWatches() < MAX_WATCHABLE_QUESTS ) then
 			AddQuestWatch(arg1,MAX_QUEST_WATCH_TIME);
@@ -626,7 +626,7 @@ function QuestLog_SetSelection(questIndex)
 		QuestLogDetailScrollChildFrame:Show();
 	end
 
-	local title, level, questTag, suggestedGroup, isHeader, isCollapsed, isComplete, isDaily = GetQuestLogTitle(questIndex);
+	local title, level, questTag, suggestedGroup, isHeader, isCollapsed, isComplete, isDaily, questID = GetQuestLogTitle(questIndex);
 	if ( isHeader ) then
 		if ( isCollapsed ) then
 			ExpandQuestHeader(questIndex);
@@ -634,6 +634,12 @@ function QuestLog_SetSelection(questIndex)
 			CollapseQuestHeader(questIndex);
 		end
 		return;
+	end
+	
+	if ( CanAbandonQuest(questID) ) then
+		QuestLogFrameAbandonButton:Enable();
+	else
+		QuestLogFrameAbandonButton:Disable();
 	end
 	
 	if (isComplete and GetQuestLogIsAutoComplete(questIndex)) then

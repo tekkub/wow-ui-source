@@ -110,6 +110,7 @@ ChatTypeInfo["BN_INLINE_TOAST_CONVERSATION"]			= { sticky = 0, flashTab = true, 
 ChatTypeInfo["BN_WHISPER_PLAYER_OFFLINE"] 				= { sticky = 0, flashTab = false, flashTabOnGeneral = false };
 ChatTypeInfo["COMBAT_GUILD_XP_GAIN"]					= { sticky = 0, flashTab = false, flashTabOnGeneral = false };
 ChatTypeInfo["PET_BATTLE_COMBAT_LOG"]					= { sticky = 0, flashTab = false, flashTabOnGeneral = false };
+ChatTypeInfo["PET_BATTLE_INFO"]							= { sticky = 0, flashTab = false, flashTabOnGeneral = false };
 
 --NEW_CHAT_TYPE -Add the info here.
 
@@ -277,6 +278,9 @@ ChatTypeGroup["COMBAT_GUILD_XP_GAIN"] = {
 };
 ChatTypeGroup["PET_BATTLE_COMBAT_LOG"] = {
 	"CHAT_MSG_PET_BATTLE_COMBAT_LOG",
+};
+ChatTypeGroup["PET_BATTLE_INFO"] = {
+	"CHAT_MSG_PET_BATTLE_INFO",
 };
 
 --NEW_CHAT_TYPE - Add the chat type above.
@@ -1110,7 +1114,7 @@ SecureCmdList["USERANDOM"] = SecureCmdList["CASTRANDOM"];
 
 SecureCmdList["CASTSEQUENCE"] = function(msg)
 	local sequence, target = SecureCmdOptionParse(msg);
-	if ( sequence ) then
+	if ( sequence and sequence ~= "" ) then
 		ExecuteCastSequence(sequence, target);
 	end
 end
@@ -2211,7 +2215,7 @@ end
 
 SlashCmdList["RAID_INFO"] = function(msg)
 	RaidFrame.slashCommand = 1;
-	if ( ( GetNumSavedInstances() > 0 ) and not RaidInfoFrame:Visible() ) then
+	if ( ( GetNumSavedInstances() > 0 ) and not RaidInfoFrame:IsVisible() ) then
 		ToggleRaidFrame();
 		RaidInfoFrame:Show();
 	elseif ( not RaidFrame:IsVisible() ) then
@@ -2490,8 +2494,6 @@ end
 ChatFrame_SetupListProxyTable(SecureCmdList);
 ChatFrame_SetupListProxyTable(SlashCmdList);
 ChatFrame_SetupListProxyTable(ChatTypeInfo);
-ChatFrame_ImportAllListsToHash();
-ChatFrame_ImportEmoteTokensToHash();
 
 for index, value in pairs(ChatTypeInfo) do
 	value.r = 1.0;
@@ -2499,6 +2501,9 @@ for index, value in pairs(ChatTypeInfo) do
 	value.b = 1.0;
 	value.id = GetChatTypeIndex(index);
 end
+
+ChatFrame_ImportAllListsToHash();
+ChatFrame_ImportEmoteTokensToHash();
 	
 -- ChatFrame functions
 function ChatFrame_OnLoad(self)
@@ -3102,7 +3107,7 @@ function ChatFrame_MessageEventHandler(self, event, ...)
 				message = globalstring;
 			elseif ( arg1 == "FRIEND_PENDING" ) then
 				message = format(BN_INLINE_TOAST_FRIEND_PENDING, BNGetNumFriendInvites());
-			elseif ( arg1 == "FRIEND_REMOVED" ) then
+			elseif ( arg1 == "FRIEND_REMOVED" or arg1 == "BATTLETAG_FRIEND_REMOVED" ) then
 				message = format(globalstring, arg2);
 			elseif ( arg1 == "FRIEND_ONLINE" or arg1 == "FRIEND_OFFLINE") then
 				local hasFocus, toonName, client, realmName, realmID, faction, race, class, guild, zoneName, level, gameText = BNGetToonInfo(arg13);
@@ -3115,7 +3120,6 @@ function ChatFrame_MessageEventHandler(self, event, ...)
 					elseif ( client == BNET_CLIENT_D3 ) then
 						toonNameText = "|TInterface\\ChatFrame\\UI-ChatIcon-D3:14|t"..toonNameText;
 					end
-					
 					local playerLink = format("|HBNplayer:%s:%s:%s:%s:%s|h[%s] (%s)|h", arg2, arg13, arg11, Chat_GetChatCategory(type), 0, arg2, toonNameText);
 					message = format(globalstring, playerLink);
 				else
@@ -3874,6 +3878,18 @@ function ChatEdit_InsertLink(text)
 		end
 		return true;
 	end
+	if ( TradeSkillFrame and TradeSkillFrame:IsShown() )  then
+		local item;
+		if ( strfind(text, "item:", 1, true) ) then
+			item = GetItemInfo(text);
+		end
+		if ( item ) then
+			TradeSkillFrameSearchBox:SetFontObject("ChatFontSmall");
+			TradeSkillFrameSearchBoxSearchIcon:SetVertexColor(1.0, 1.0, 1.0);
+			TradeSkillFrameSearchBox:SetText(item);
+			return true;
+		end
+	end
 	return false;
 end
 
@@ -4395,7 +4411,7 @@ function ChatEdit_ExtractTellTarget(editBox, msg, chatType)
 	end
 	
 	if(strsub(target, 1, 2) == "|K") then
-		target, msg = BNTokenCombineGivenAndSurname(target);
+		target, msg = BNTokenFindName(target);
 		--If there is a space just after the name (to trigger a parse), remove it.
 		if ( strsub(msg, 1, 1) == " " ) then
 			msg = strsub(msg, 2);
@@ -4768,6 +4784,11 @@ function ChatChannelDropDown_PopOutChat(self, chatType, chatTarget)
 		if ( chatType == "CHANNEL" ) then
 			frame.editBox:SetAttribute("channelTarget", chatTarget);
 			ChatFrame_AddChannel(frame, Chat_GetChannelShortcutName(chatTarget));
+		end
+		
+		if ( chatType == "PET_BATTLE_COMBAT_LOG" or chatType == "PET_BATTLE_INFO" ) then
+			frame.editBox:SetAttribute("chatType", "SAY");
+			frame.editBox:SetAttribute("stickyType", "SAY");
 		end
 		
 		--Remove the things popped out from the source chat frame.

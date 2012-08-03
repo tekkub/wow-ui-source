@@ -16,12 +16,12 @@ function MerchantFrame_OnLoad(self)
 	
 	MoneyFrame_SetMaxDisplayWidth(MerchantMoneyFrame, 160);
 	
-	UIDropDownMenu_SetWidth(self.lootFilter, 95);
+	UIDropDownMenu_SetWidth(self.lootFilter, 132);
 	UIDropDownMenu_Initialize(self.lootFilter, MerchantFrame_InitFilter);
 end
 
 function MerchantFrame_OnEvent(self, event, ...)
-	if ( event == "MERCHANT_UPDATE" ) then
+	if ( event == "MERCHANT_UPDATE" and "MERCHANT_FILTER_ITEM_UPDATE" ) then
 		self.update = true;
 	elseif ( event == "MERCHANT_CLOSED" ) then
 		self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE");

@@ -676,6 +676,10 @@ function ContainerFrame_GetExtendedPriceString(itemButton, isEquipped, quantity)
 	itemCount =  (itemCount or 0) * quantity;
 	local itemsString;
 	
+	if ( money > 0 ) then
+		itemsString = "|W"..GetMoneyString(money).."|w";
+	end
+	
 	local maxQuality = 0;
 	for i=1, itemCount, 1 do
 		local itemTexture, itemQuantity, itemLink = GetContainerItemPurchaseItem(bag, slot, i, isEquipped);
@@ -704,7 +708,7 @@ function ContainerFrame_GetExtendedPriceString(itemButton, isEquipped, quantity)
 	if(itemsString == nil) then
 		itemsString = "";
 	end
-	MerchantFrame.price = money;
+	MerchantFrame.price = 0;
 	MerchantFrame.refundBag = bag;
 	MerchantFrame.refundSlot = slot;
 	MerchantFrame.honorPoints = honorPoints;
@@ -723,7 +727,7 @@ function ContainerFrame_GetExtendedPriceString(itemButton, isEquipped, quantity)
 	if (hasEnchants) then
 		textLine2 = "\n\n"..CONFIRM_REFUND_ITEM_ENHANCEMENTS_LOST;
 	end
-	StaticPopupDialogs["CONFIRM_REFUND_TOKEN_ITEM"].hasMoneyFrame = (money ~= 0) and 1 or nil;
+	StaticPopupDialogs["CONFIRM_REFUND_TOKEN_ITEM"].hasMoneyFrame = nil;
 	StaticPopup_Show("CONFIRM_REFUND_TOKEN_ITEM", itemsString, textLine2, {["texture"] = refundItemTexture, ["name"] = itemName, ["color"] = {r, g, b, 1}, ["link"] = refundItemLink, ["index"] = index, ["count"] = count * quantity});
 	return true;
 end
@@ -777,13 +781,6 @@ function ContainerFrameItemButton_OnModifiedClick(self, button)
 	if ( HandleModifiedItemClick(GetContainerItemLink(self:GetParent():GetID(), self:GetID())) ) then
 		return;
 	end
-	if ( TradeSkillFrame and TradeSkillFrame:IsShown() and IsModifiedClick("TRADESEARCHADD") )  then
-		local name = GetItemInfo( GetContainerItemID( self:GetParent():GetID(), self:GetID()) );
-		TradeSkillFrameSearchBox:SetFontObject("ChatFontSmall");
-		TradeSkillFrameSearchBoxSearchIcon:SetVertexColor(1.0, 1.0, 1.0);
-		TradeSkillFrameSearchBox:SetText(name);
-		return;
-	end
 	if ( IsModifiedClick("SOCKETITEM") ) then
 		SocketContainerItem(self:GetParent():GetID(), self:GetID());
 	end
@@ -815,7 +812,12 @@ function ContainerFrameItemButton_OnEnter(self)
 	end
 
 	local showSell = nil;
-	local hasCooldown, repairCost = GameTooltip:SetBagItem(self:GetParent():GetID(), self:GetID());
+	local hasCooldown, repairCost, speciesID, level, breedQuality, maxHealth, power, speed, name = GameTooltip:SetBagItem(self:GetParent():GetID(), self:GetID());
+	if(speciesID and speciesID > 0) then
+		BattlePetToolTip_Show(speciesID, level, breedQuality, maxHealth, power, speed, name);
+		return;
+	end
+
 	if ( InRepairMode() and (repairCost and repairCost > 0) ) then
 		GameTooltip:AddLine(REPAIR_COST, "", 1, 1, 1);
 		SetTooltipMoney(GameTooltip, repairCost);

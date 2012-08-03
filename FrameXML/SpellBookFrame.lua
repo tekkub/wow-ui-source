@@ -77,7 +77,7 @@ function ToggleSpellBook(bookType)
 
 	local tutorial, helpPlate = SpellBookFrame_GetTutorialEnum()
 	if ( tutorial and not GetCVarBitfield("closedInfoFrames", tutorial) and GetCVarBool("showTutorials") ) then
-		if ( helpPlate and not HelpPlate_IsShowing(helpPlate) ) then
+		if ( helpPlate and not HelpPlate_IsShowing(helpPlate) and SpellBookFrame:IsShown()) then
 			HelpPlate_Show( helpPlate, SpellBookFrame, SpellBookFrame.MainHelpButton );
 			SetCVarBitfield( "closedInfoFrames", tutorial, true );
 		end
@@ -1122,7 +1122,7 @@ SPEC_CORE_ABILITY_TEXT[73] = "WARRIOR_PROT";
 
 -- Hardcoded spell id's for spec display
 SPEC_CORE_ABILITY_DISPLAY = {}
-SPEC_CORE_ABILITY_DISPLAY[250] = {	45462,	45477,	55050,	45470,	56815,			}; --Blood
+SPEC_CORE_ABILITY_DISPLAY[250] = {	45462,	45477,	55050,	49998,	56815,			}; --Blood
 SPEC_CORE_ABILITY_DISPLAY[251] = {	45462,	49184,	49020,	49143,					}; --Frost
 SPEC_CORE_ABILITY_DISPLAY[252] = {	45462,	45477,	55090,	85948,	63560,	47541,	}; --Unholy
 
@@ -1295,10 +1295,6 @@ function SpellBook_UpdateCoreAbilitiesTab()
 	SpellBookPage2:SetDesaturated(desaturate);
 end
 
-function CoreAbility_OnEnter(self)
-	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-	GameTooltip:SetSpellBookItem(self.spellID);
-end
 
 -- *************************************************************************************
 WHAT_HAS_CHANGED_TITLE = {}
@@ -1392,7 +1388,7 @@ WhatHasChangedFrame_HelpPlate = {
 
 function SpellBook_ToggleTutorial()
 	local tutorial, helpPlate = SpellBookFrame_GetTutorialEnum();
-	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) ) then
+	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) and SpellBookFrame:IsShown()) then
 		HelpPlate_Show( helpPlate, SpellBookFrame, SpellBookFrame.MainHelpButton, true );
 		SetCVarBitfield( "closedInfoFrames", tutorial, true );
 	else

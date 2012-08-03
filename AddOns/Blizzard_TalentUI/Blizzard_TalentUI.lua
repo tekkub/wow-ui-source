@@ -770,7 +770,7 @@ PlayerTalentFrame_HelpPlate = {
 function PlayerTalentFrame_ToggleTutorial()
 	local tutorial, helpPlate, mainHelpButton = PlayerTalentFrame_GetTutorial();
 		
-	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) ) then
+	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) and PlayerTalentFrame:IsShown()) then
 		HelpPlate_Show( helpPlate, PlayerTalentFrame, mainHelpButton, true );
 		SetCVarBitfield( "closedInfoFrames", tutorial, true );
 	else
@@ -1028,7 +1028,8 @@ function PlayerTalentFrameTab_OnClick(self)
 	
 	local tutorial, helpPlate, mainHelpButton = PlayerTalentFrame_GetTutorial();
 	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) ) then
-		if ( tutorial and not GetCVarBitfield("closedInfoFrames", tutorial) and GetCVarBool("showTutorials")) then
+		if ( tutorial and not GetCVarBitfield("closedInfoFrames", tutorial) 
+			and GetCVarBool("showTutorials") and PlayerTalentFrame:IsShown()) then
 			HelpPlate_Show( helpPlate, PlayerTalentFrame, mainHelpButton );
 			SetCVarBitfield( "closedInfoFrames", tutorial, true );
 		else
@@ -1304,7 +1305,7 @@ function SpecButton_OnEnter(self)
 	if ( not self.selected ) then
 		GameTooltip:SetOwner(self, "ANCHOR_TOP");
 		GameTooltip:AddLine(self.tooltip, NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b);
-	if ( self.displayTrainerTooltip ) then
+		if ( self.displayTrainerTooltip and not self:GetParent().isPet ) then
 			GameTooltip:AddLine(TALENT_SPEC_CHANGE_AT_CLASS_TRAINER, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b);
 		end
 		GameTooltip:SetMinimumWidth(300, true);
@@ -1432,7 +1433,10 @@ function PlayerTalentFrame_UpdateSpecFrame(self, spec)
 		scrollChild.scrollwork_bottomright:SetDesaturated(false);
 	end
 	-- disable Learn button
-	if ( playerTalentSpec or disable or UnitLevel("player") < SHOW_SPEC_LEVEL ) then
+	if ( self.isPet and disable ) then
+		self.learnButton:Enable();
+		UIFrameFlash(self.learnButton.Flash, 0.7, 0.7, -1);
+	elseif ( playerTalentSpec or disable or UnitLevel("player") < SHOW_SPEC_LEVEL ) then
 		self.learnButton:Disable();
 		UIFrameFlashStop(self.learnButton.Flash);
 	else

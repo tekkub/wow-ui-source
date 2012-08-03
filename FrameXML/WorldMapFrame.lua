@@ -3,7 +3,7 @@ NUM_WORLDMAP_WORLDEFFECT_POIS = 0;
 NUM_WORLDMAP_SCENARIO_POIS = 0;
 NUM_WORLDMAP_GRAVEYARDS = 0;
 NUM_WORLDMAP_OVERLAYS = 0;
-NUM_WORLDMAP_FLAGS = 2;
+NUM_WORLDMAP_FLAGS = 4;
 NUM_WORLDMAP_DEBUG_ZONEMAP = 0;
 NUM_WORLDMAP_DEBUG_OBJECTS = 0;
 WORLDMAP_COSMIC_ID = -1;
@@ -235,6 +235,13 @@ function WorldMapFrame_OnEvent(self, event, ...)
 		end
 	elseif ( event == "WORLD_MAP_UPDATE" or event == "REQUEST_CEMETERY_LIST_RESPONSE" ) then
 		if ( not self.blockWorldMapUpdate and self:IsShown() ) then
+			-- if we are exiting a micro dungeon we should update the world map
+			if (event == "REQUEST_CEMETERY_LIST_RESPONSE") then
+				local _, _, _, isMicroDungeon = GetMapInfo();
+				if (isMicroDungeon) then
+					SetMapToCurrentZone();
+				end
+			end
 			WorldMapFrame_UpdateMap();
 		end
 	elseif ( event == "ARTIFACT_DIG_SITE_UPDATED" ) then
@@ -399,7 +406,7 @@ function WorldMap_DrawWorldEffects()
 	
 	-- Hide unused icons in the pool
 	for i=scenarioIconCount, NUM_WORLDMAP_SCENARIO_POIS do
-		local scenarioPOIName = "WorldMapFrameScenarioPOI"..scenarioIconCount;
+		local scenarioPOIName = "WorldMapFrameScenarioPOI"..i;
 		local scenarioPOI = _G[scenarioPOIName];
 		scenarioPOI:Hide();
 	end
@@ -908,8 +915,10 @@ function WorldMapLevelDropDown_Initialize()
 	
 	local usesTerrainMap = DungeonUsesTerrainMap();
 	local floorMapCount, firstFloor = GetNumDungeonMapLevels();
-
+	local _, _, _, isMicroDungeon = GetMapInfo();
+	
 	local lastFloor = firstFloor + floorMapCount - 1;
+	
 	for i=firstFloor, lastFloor do
 		local floorNum = i;
 		if (usesTerrainMap) then
@@ -2506,6 +2515,7 @@ function WorldMapTitleDropDown_ToggleOpacity()
 end
 
 function WorldMapTitleDropDown_ResetPosition()
+	WorldMapFrame:ClearAllPoints();
 	WorldMapFrame:SetPoint("TOPLEFT", 10, -118);
 	WorldMapScreenAnchor:ClearAllPoints();
 	WorldMapScreenAnchor:StartMoving();

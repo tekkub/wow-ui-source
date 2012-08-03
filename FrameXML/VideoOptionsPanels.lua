@@ -757,7 +757,7 @@ function Graphics_OnLoad (self)
 					if(VideoData[key].data[j].text == value) then
 						for cvar, cvar_value in pairs(VideoData[key].data[j].cvars) do
 							if(ThisVideoOptions[cvar] ~= cvar_value) then
-								print("mismatch " .. key .. "[" .. qualityNames[i] .. "]:" .. cvar .. ", c++:" .. ThisVideoOptions[cvar] .. " ~= lua:" .. cvar_value);
+--								print("mismatch " .. key .. "[" .. qualityNames[i] .. "]:" .. cvar .. ", c++:" .. ThisVideoOptions[cvar] .. " ~= lua:" .. cvar_value);
 								VideoData[key].data[j].cvars[cvar] = ThisVideoOptions[cvar];
 							end
 						end
@@ -834,10 +834,18 @@ function LanguagePanel_Cancel (self)
 	end
 end
 
+function LanguagePanel_Okay (self)
+	local languageDropDown = InterfaceOptionsLanguagesPanelLocaleDropDown;
+	if (languageDropDown.value ~= languageDropDown.oldValue) then
+		languageDropDown.oldValue = languageDropDown.value;
+	end
+	BlizzardOptionsPanel_Okay(self);
+end
+
 function InterfaceOptionsLanguagesPanel_OnLoad (self)
 	self.name = LANGUAGES_LABEL;
 	self.options = LanguagesPanelOptions;
-	BlizzardOptionsPanel_OnLoad(self, nil, LanguagePanel_Cancel, BlizzardOptionsPanel_Default, BlizzardOptionsPanel_Refresh);
+	BlizzardOptionsPanel_OnLoad(self, LanguagePanel_Okay, LanguagePanel_Cancel, BlizzardOptionsPanel_Default, BlizzardOptionsPanel_Refresh);
 	OptionsFrame_AddCategory(VideoOptionsFrame, self);
 end
 
@@ -906,6 +914,7 @@ LanguageRegions["esMX"] = 10;
 LanguageRegions["ruRU"] = 11;
 LanguageRegions["ptBR"] = 12;
 LanguageRegions["ptPT"] = 13;
+LanguageRegions["itIT"] = 14;
 
 LANGUAGE_TEXT_HEIGHT = 22/512;
 

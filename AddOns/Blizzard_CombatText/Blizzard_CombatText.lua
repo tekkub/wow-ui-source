@@ -83,6 +83,7 @@ COMBAT_TEXT_RUNE = {};
 COMBAT_TEXT_RUNE[1] = COMBAT_TEXT_RUNE_BLOOD;
 COMBAT_TEXT_RUNE[2] = COMBAT_TEXT_RUNE_UNHOLY;
 COMBAT_TEXT_RUNE[3] = COMBAT_TEXT_RUNE_FROST;
+COMBAT_TEXT_RUNE[4] = COMBAT_TEXT_RUNE_DEATH;
 
 function CombatText_OnLoad(self)
 	CombatText_UpdateDisplayedMessages();
@@ -253,7 +254,8 @@ function CombatText_OnEvent(self, event, ...)
 			or arg3 == "FOCUS"
 			or arg3 == "ENERGY"
 			or arg3 == "RUNIC_POWER"
-			or arg3 == "SOUL_SHARDS" ) then
+			or arg3 == "SOUL_SHARDS"
+			or arg3 == "LIGHT_FORCE") then
 			message = data.." ".._G[arg3];
 			info = PowerBarColor[arg3];
 		elseif ( arg3 == "HOLY_POWER" and PaladinPowerBar:IsShown() and PaladinPowerBar:GetAlpha() > 0.5 ) then

@@ -154,6 +154,7 @@ function ActionBarActionEventsFrame_OnLoad(self)
 	self:RegisterEvent("PET_STABLE_SHOW");
 	self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW");
 	self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE");
+	self:RegisterEvent("UPDATE_SUMMONPETS_ACTION");
 end
 
 function ActionBarActionEventsFrame_OnEvent(self, event, ...)
@@ -246,9 +247,9 @@ function ActionButton_Update (self)
 	local name = self:GetName();
 
 	local action = self.action;
-	local icon = _G[name.."Icon"];
-	local buttonCooldown = _G[name.."Cooldown"];
-	local texture = GetActionTexture(action);	
+	local icon = self.icon;
+	local buttonCooldown = self.cooldown;
+	local texture = GetActionTexture(action);
 
 	if ( HasAction(action) ) then
 		if ( not self.eventsRegistered ) then
@@ -414,8 +415,8 @@ function ActionButton_UpdateCount (self)
 end
 
 function ActionButton_UpdateCooldown (self)
-	local start, duration, enable = GetActionCooldown(self.action);
-	CooldownFrame_SetTimer(self.cooldown, start, duration, enable);
+	local start, duration, enable, charges, maxCharges = GetActionCooldown(self.action);
+	CooldownFrame_SetTimer(self.cooldown, start, duration, enable, charges, maxCharges);
 end
 
 --Overlay stuff
@@ -499,9 +500,17 @@ function ActionButton_OnEvent (self, event, ...)
 		end
 		return;
 	end
-	if ( event == "PLAYER_ENTERING_WORLD" or event == "UPDATE_SHAPESHIFT_FORM" ) then
-		-- need to listen for UPDATE_SHAPESHIFT_FORM because attack icons change when the shapeshift form changes
+	if ( event == "PLAYER_ENTERING_WORLD" ) then
 		ActionButton_Update(self);
+		return;
+	end
+	if ( event == "UPDATE_SHAPESHIFT_FORM" ) then
+		-- need to listen for UPDATE_SHAPESHIFT_FORM because attack icons change when the shapeshift form changes
+		-- This is NOT intended to update everything about shapeshifting; most stuff should be handled by ActionBar-specific events such as UPDATE_BONUS_ACTIONBAR, UPDATE_USABLE, etc.
+		local texture = GetActionTexture(self.action);
+		if (texture) then
+			self.icon:SetTexture(texture);
+		end
 		return;
 	end
 	if ( event == "ACTIONBAR_SHOWGRID" ) then
@@ -527,7 +536,7 @@ function ActionButton_OnEvent (self, event, ...)
 		ActionButton_UpdateState(self);
 	elseif ( event == "ACTIONBAR_UPDATE_USABLE" ) then
 		ActionButton_UpdateUsable(self);
-	elseif ( event == "ACTIONBAR_UPDATE_COOLDOWN" ) then
+	elseif ( event == "ACTIONBAR_UPDATE_COOLDOWN" ) then	--Not actually registered for default action bars. Cooldowns are changed in C-code.
 		ActionButton_UpdateCooldown(self);
 		-- Update tooltip
 		if ( GameTooltip:GetOwner() == self ) then
@@ -576,6 +585,14 @@ function ActionButton_OnEvent (self, event, ...)
 		end
 	elseif ( event == "SPELL_UPDATE_CHARGES" ) then
 		ActionButton_UpdateCount(self);
+	elseif ( event == "UPDATE_SUMMONPETS_ACTION" ) then
+		local actionType, id = GetActionInfo(self.action);
+		if (actionType == "summonpet") then
+			local texture = GetActionTexture(self.action);
+			if (texture) then
+				self.icon:SetTexture(texture);
+			end
+		end
 	end
 end
 

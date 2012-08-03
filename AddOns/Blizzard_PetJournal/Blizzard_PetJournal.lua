@@ -17,12 +17,17 @@ local UNLOCK_REQUIREMENTS = {
 StaticPopupDialogs["BATTLE_PET_RENAME"] = {
 	text = PET_RENAME_LABEL,
 	button1 = ACCEPT,
+	button3 = PET_RENAME_DEFAULT_LABEL,
 	button2 = CANCEL,
 	hasEditBox = 1,
 	maxLetters = 16,
 	OnAccept = function(self)
 		local text = self.editBox:GetText();
 		C_PetJournal.SetCustomName(self.data, text);
+		PetJournal_UpdateAll();
+	end,
+	OnAlt = function(self)
+		C_PetJournal.SetCustomName(self.data, "");
 		PetJournal_UpdateAll();
 	end,
 	EditBoxOnEnterPressed = function(self)
@@ -51,6 +56,9 @@ StaticPopupDialogs["BATTLE_PET_PUT_IN_CAGE"] = {
 	maxLetters = 30,
 	OnAccept = function(self)
 		C_PetJournal.CagePetByID(self.data);
+		if (PetJournalPetCard.petID == self.data) then
+			PetJournal_ShowPetCard(1);
+		end
 	end,
 	timeout = 0,
 	exclusive = 1,
@@ -64,6 +72,9 @@ StaticPopupDialogs["BATTLE_PET_RELEASE"] = {
 	maxLetters = 30,
 	OnAccept = function(self)
 		C_PetJournal.ReleasePetByID(self.data);
+		if (PetJournalPetCard.petID == self.data) then
+			PetJournal_ShowPetCard(1);
+		end
 	end,
 	timeout = 0,
 	exclusive = 1,
@@ -113,23 +124,25 @@ function PetJournal_OnLoad(self)
 	self:RegisterEvent("PET_JOURNAL_PETS_HEALED");
 	self:RegisterEvent("BATTLE_PET_CURSOR_CLEAR");
 	self:RegisterEvent("COMPANION_UPDATE");
-	
-	
+	self:RegisterEvent("PET_BATTLE_LEVEL_CHANGED");
+
 	self.listScroll.update = PetJournal_UpdatePetList;
 	self.listScroll.scrollBar.doNotHide = true;
 	HybridScrollFrame_CreateButtons(self.listScroll, "CompanionListButtonTemplate", 44, 0);
 	
-	--PanelTemplates_DeselectTab(PetJournalTab2);
 	PetJournal.isWild = false;
 	UIDropDownMenu_Initialize(self.petOptionsMenu, PetOptionsMenu_Init, "MENU");
-end
 
+	PetJournal_ShowPetCard(1);
+end
 
 function PetJournal_OnShow(self)
 	PlaySound("igCharacterInfoOpen");
 	PetJournal_UpdatePetList();
 	PetJournal_UpdatePetLoadOut();
-	
+	PetJournal_UpdatePetCard(PetJournalPetCard);
+
+	self:RegisterEvent("ACHIEVEMENT_EARNED");
 	PetJournal.AchievementStatus.SumText:SetText(GetCategoryAchievementPoints(PET_ACHIEVEMENT_CATEGORY, true));
 	
 	-- check to show the help plate
@@ -148,6 +161,7 @@ end
 
 
 function PetJournal_OnHide(self)
+	self:UnregisterEvent("ACHIEVEMENT_EARNED");
 	PlaySound("igCharacterInfoClose");
 	PetJournal.SpellSelect:Hide();
 	HelpPlate_Hide();
@@ -155,21 +169,26 @@ end
 
 
 function PetJournal_OnEvent(self, event, ...)
-	if event == "PET_JOURNAL_PET_DELETED" then
+	if event == "PET_BATTLE_LEVEL_CHANGED" then
+		PetJournal_UpdatePetLoadOut();
+	elseif event == "PET_JOURNAL_PET_DELETED" then
 		local petID = ...;
-		if(PetJournal.pcPetID == petID) then
-			PetJournal_HidePetCard();
-		end
-		PetJournal_FindPetCardIndex();
 		PetJournal_UpdatePetList();
 		PetJournal_UpdatePetLoadOut();
+		if(PetJournalPetCard.petID == petID) then
+			PetJournal_ShowPetCard(1);
+		end
+		PetJournal_FindPetCardIndex();
+		PetJournal_UpdatePetCard(PetJournalPetCard);
+		PetJournal_HidePetDropdown();
 	elseif event == "PET_JOURNAL_PETS_HEALED" then
 		PetJournal_UpdatePetLoadOut();
 	elseif event == "PET_JOURNAL_LIST_UPDATE" then
 		PetJournal_FindPetCardIndex();
 		PetJournal_UpdatePetList();
 		PetJournal_UpdatePetLoadOut();
-		PetJournal_UpdatePetCard(PetJournal.PetCardList.MainCard);
+		PetJournal_UpdatePetCard(PetJournalPetCard);
+		PetJournal_HidePetDropdown();
 	elseif event == "BATTLE_PET_CURSOR_CLEAR" then
 		PetJournal.Loadout.Pet1.setButton:Hide();
 		PetJournal.Loadout.Pet2.setButton:Hide();
@@ -180,17 +199,60 @@ function PetJournal_OnEvent(self, event, ...)
 			PetJournal_UpdatePetList();
 			PetJournal_UpdateSummonButtonState();
 		end
+	elseif event == "ACHIEVEMENT_EARNED" then
+		PetJournal.AchievementStatus.SumText:SetText(GetCategoryAchievementPoints(PET_ACHIEVEMENT_CATEGORY, true));
 	end
 end
 
+function PetJournal_SelectSpecies(self, targetSpeciesID)
+	local numPets = C_PetJournal.GetNumPets(PetJournal.isWild);
+	local petIndex = nil;
+	for i = 1,numPets do
+		local petID, speciesID, owned = C_PetJournal.GetPetInfoByIndex(i, isWild);
+		if (speciesID == targetSpeciesID) then
+			petIndex = i;
+			break;
+		end
+	end
+	
+	if ( petIndex ) then --Might be filtered out and have no index.
+		PetJournalPetList_UpdateScrollPos(self.listScroll, petIndex);
+	end
+	PetJournal_ShowPetCardBySpeciesID(targetSpeciesID);
+end
+
+function PetJournal_SelectPet(self, targetPetID)
+	local numPets = C_PetJournal.GetNumPets(PetJournal.isWild);
+	local petIndex = nil;
+	for i = 1,numPets do
+		local petID, speciesID, owned = C_PetJournal.GetPetInfoByIndex(i, isWild);
+		if (petID == targetPetID) then
+			petIndex = i;
+			break;
+		end
+	end
+	
+	if ( petIndex ) then --Might be filtered out and have no index.
+		PetJournalPetList_UpdateScrollPos(self.listScroll, petIndex);
+	end
+	PetJournal_ShowPetCardByID(targetPetID);
+end
+
+function PetJournalPetList_UpdateScrollPos(self, visibleIndex)
+	local buttons = self.buttons;
+	local height = math.max(0, math.floor(self.buttonHeight * (visibleIndex - (#buttons)/2)));
+	HybridScrollFrame_SetOffset(self, height);
+	self.scrollBar:SetValue(height);
+end
+
 function PetJournal_UpdateSummonButtonState()
-	if ( PetJournal.pcPetID and C_PetJournal.PetIsSummonable(PetJournal.pcPetID)) then
+	if ( PetJournalPetCard.petID and C_PetJournal.PetIsSummonable(PetJournalPetCard.petID)) then
 		PetJournal.SummonButton:Enable();
 	else
 		PetJournal.SummonButton:Disable();
 	end
 
-	if ( PetJournal.pcPetID and PetJournal.pcPetID == C_PetJournal.GetSummonedPetID() ) then
+	if ( PetJournalPetCard.petID and PetJournalPetCard.petID == C_PetJournal.GetSummonedPetID() ) then
 		PetJournal.SummonButton:SetText(PET_DISMISS);
 	else
 		PetJournal.SummonButton:SetText(BATTLE_PET_SUMMON);
@@ -211,10 +273,14 @@ end
 function PetJournalHealPetButton_OnShow(self)
 	self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
 	self:RegisterEvent("SPELLS_CHANGED");
+	self:RegisterEvent("PET_BATTLE_OPENING_START");
+	self:RegisterEvent("PET_BATTLE_CLOSE");
 	PetJournalHealPetButton_UpdateUsability(self);
 end
 
 function PetJournalHealPetButton_OnHide(self)
+	self:UnregisterEvent("PET_BATTLE_OPENING_START");
+	self:UnregisterEvent("PET_BATTLE_CLOSE");
 	self:UnregisterEvent("SPELL_UPDATE_COOLDOWN");
 	if (self:IsEventRegistered("SPELLS_CHANGED")) then
 		self:UnregisterEvent("SPELLS_CHANGED");
@@ -226,15 +292,26 @@ function PetJournalHealPetButton_OnDragStart(self)
 end
 
 function PetJournalHealPetButton_UpdateUsability(self)
-	if (IsSpellKnown(self.spellID)) then
-		self.texture:SetDesaturated(0);
-		self.BlackCover:Hide();
-		self:UnregisterEvent("SPELLS_CHANGED");
-		self:RegisterForClicks("LeftButtonUp", "RightButtonUp");
-		self:RegisterForDrag("LeftButton");
+	if (IsSpellKnown(self.spellID) and C_PetJournal.IsJournalUnlocked()) then
+		if (C_PetBattles.IsInBattle()) then
+			self:SetButtonState("NORMAL", true);
+			self.texture:SetDesaturated(true);
+			self.LockIcon:Show();
+			self.BlackCover:Show();
+		else
+			self:SetButtonState("NORMAL", false);
+			self.texture:SetDesaturated(false);
+			self.LockIcon:Hide();
+			self.BlackCover:Hide();
+			self:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+			self:RegisterForDrag("LeftButton");
+		end
+		if (self:IsEventRegistered("SPELLS_CHANGED")) then
+			self:UnregisterEvent("SPELLS_CHANGED");
+		end
 	else
 		self.BlackCover:Show();
-		self.texture:SetDesaturated(1);
+		self.texture:SetDesaturated(true);
 	end
 end
 
@@ -245,7 +322,7 @@ function PetJournalHealPetButton_OnEvent(self, event, ...)
 		if ( GameTooltip:GetOwner() == self ) then
 			PetJournalHealPetButton_OnEnter(self);
 		end
-	elseif ( event == "SPELLS_CHANGED" ) then
+	elseif ( event == "SPELLS_CHANGED" or event == "PET_BATTLE_OPENING_START" or event == "PET_BATTLE_CLOSE" ) then
 		PetJournalHealPetButton_UpdateUsability(self);
 	end
 end
@@ -261,6 +338,12 @@ function PetJournalHealPetButton_OnEnter(self)
 	GameTooltip:SetSpellByID(self.spellID);
 	if (not IsSpellKnown(self.spellID)) then
 		GameTooltip:AddLine(PET_BATTLE_HEAL_SPELL_UNKNOWN, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, 1);
+		GameTooltip:Show();
+	elseif (not C_PetJournal.IsJournalUnlocked()) then
+		GameTooltip:AddLine(PET_JOURNAL_HEAL_SPELL_LOCKED, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, 1);
+		GameTooltip:Show();
+	elseif (C_PetBattles.IsInBattle()) then
+		GameTooltip:AddLine(PET_JOURNAL_HEAL_SPELL_IN_BATTLE, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, 1);
 		GameTooltip:Show();
 	end
 	self.UpdateTooltip = PetJournalHealPetButton_OnEnter;
@@ -339,6 +422,7 @@ function PetJournal_ShowPetSelect(self)
 	self.selected:Show();
 	PetJournal.SpellSelect.slotIndex = slotIndex;
 	PetJournal.SpellSelect.abilityIndex = abilityIndex;
+	PetJournal.SpellSelect:SetFrameLevel(PetJournalLoadoutBorder:GetFrameLevel()+1);
 	PetJournal_HideAbilityTooltip();
 	
 	--Setup spell one
@@ -408,56 +492,59 @@ end
 
 
 function PetJournal_UpdatePetLoadOut()
+	PetJournal_UpdateFindBattleButton();
 	PetJournal.SpellSelect:Hide();
 	for i=1,MAX_ACTIVE_PETS do
 		local loadoutPlate = PetJournal.Loadout["Pet"..i];
 		local petID, ability1ID, ability2ID, ability3ID, locked = C_PetJournal.GetPetLoadOutInfo(i);
+		
+		loadoutPlate.ReadOnlyFrame:SetShown(not C_PetJournal.IsJournalUnlocked());
+		
 		if (locked) then
 			loadoutPlate.name:Hide();
 			loadoutPlate.subName:Hide();
 			loadoutPlate.level:Hide();
+			loadoutPlate.levelBG:Hide();
 			loadoutPlate.icon:Hide();
 			loadoutPlate.model:Hide();			
 			loadoutPlate.xpBar:Hide();
-			loadoutPlate.healthBar:Hide();
+			loadoutPlate.healthFrame:Hide();
 			loadoutPlate.spell1:Hide();
 			loadoutPlate.spell2:Hide();
 			loadoutPlate.spell3:Hide();
-			loadoutPlate.shadows:Hide();
 			loadoutPlate.iconBorder:Hide();
-			loadoutPlate.abilitiesLabel:Hide();
 			loadoutPlate.emptyslot:Hide();
 			loadoutPlate.isDead:Hide();
-			-- helpFrame & requirementButton are active when the slot is locked
-			loadoutPlate.requirementButton:SetShown(UNLOCK_REQUIREMENTS[i].id);
+			loadoutPlate.dragButton:Hide();
+			-- helpFrame & requirement are active when the slot is locked
+			loadoutPlate.requirement:SetShown(UNLOCK_REQUIREMENTS[i].id);
 			if (UNLOCK_REQUIREMENTS[i].requirement == "ACHIEVEMENT" and UNLOCK_REQUIREMENTS[i].id) then
-				loadoutPlate.requirementButton:SetText(GetAchievementLink(UNLOCK_REQUIREMENTS[i].id));
-				loadoutPlate.requirementButton.achievementID = UNLOCK_REQUIREMENTS[i].id;
+				loadoutPlate.requirement.str:SetText(GetAchievementLink(UNLOCK_REQUIREMENTS[i].id));
+				loadoutPlate.requirement.achievementID = UNLOCK_REQUIREMENTS[i].id;
 			elseif (UNLOCK_REQUIREMENTS[i].requirement == "SPELL" and UNLOCK_REQUIREMENTS[i].id) then
-				loadoutPlate.requirementButton:SetText(GetSpellLink(UNLOCK_REQUIREMENTS[i].id));
-				loadoutPlate.requirementButton.spellID = UNLOCK_REQUIREMENTS[i].id;
+				loadoutPlate.requirement.str:SetText(GetSpellLink(UNLOCK_REQUIREMENTS[i].id));
+				loadoutPlate.requirement.spellID = UNLOCK_REQUIREMENTS[i].id;
 			end
-			loadoutPlate.helpFrame.slotinfo:SetText(format(BATTLE_PET_SLOT, i));
 			loadoutPlate.helpFrame.text:SetText(_G["BATTLE_PET_UNLOCK_HELP_"..i]);
 			loadoutPlate.helpFrame:Show();
 		elseif (petID <= 0) then
 			loadoutPlate.name:Hide();
 			loadoutPlate.subName:Hide();
 			loadoutPlate.level:Hide();
+			loadoutPlate.levelBG:Hide();
 			loadoutPlate.icon:Hide();
 			loadoutPlate.model:Hide();			
 			loadoutPlate.xpBar:Hide();
-			loadoutPlate.healthBar:Hide();
+			loadoutPlate.healthFrame:Hide();
 			loadoutPlate.spell1:Hide();
 			loadoutPlate.spell2:Hide();
 			loadoutPlate.spell3:Hide();
-			loadoutPlate.shadows:Hide();
 			loadoutPlate.iconBorder:Hide();
-			loadoutPlate.abilitiesLabel:Hide();
 			loadoutPlate.helpFrame:Hide();
-			loadoutPlate.requirementButton:Hide();
+			loadoutPlate.requirement:Hide();
 			loadoutPlate.emptyslot:Show();
 			loadoutPlate.emptyslot.slot:SetText(format(BATTLE_PET_SLOT, i));
+			loadoutPlate.dragButton:Show();
 			loadoutPlate.isDead:Hide();
 		else -- not locked and petID > 0
 			local speciesID, customName, level, xp, maxXp, displayID, name, icon, petType, creatureID = C_PetJournal.GetPetInfoByPetID(petID);
@@ -487,10 +574,9 @@ function PetJournal_UpdatePetLoadOut()
 			loadoutPlate.name:Show();
 			loadoutPlate.subName:Show();
 			loadoutPlate.level:Show();
+			loadoutPlate.levelBG:Show();
 			loadoutPlate.icon:Show();
-			loadoutPlate.shadows:Show();
 			loadoutPlate.iconBorder:Show();
-			loadoutPlate.abilitiesLabel:Show();
 			loadoutPlate.spell1:Show();
 			loadoutPlate.spell2:Show();
 			loadoutPlate.spell3:Show();
@@ -502,27 +588,12 @@ function PetJournal_UpdatePetLoadOut()
 				loadoutPlate.subName:SetText(name);
 			else
 				loadoutPlate.name:SetText(name);
-				loadoutPlate.name:SetHeight(30);
+				loadoutPlate.name:SetHeight(28);
 				loadoutPlate.subName:Hide();
 			end
 			loadoutPlate.level:SetText(level);
 			loadoutPlate.icon:SetTexture(icon);
 			
-			loadoutPlate.model:Show();
-			if ( displayID ~= 0 ) then
-				if ( displayID ~= loadoutPlate.displayID ) then
-					loadoutPlate.creatureID = nil;
-					loadoutPlate.displayID = displayID;
-					loadoutPlate.model:SetDisplayInfo(displayID);
-				end
-			elseif ( creatureID ~= 0 ) then
-				if ( creatureID ~= loadoutPlate.creatureID ) then
-					loadoutPlate.creatureID = creatureID;
-					loadoutPlate.displayID = nil;
-					loadoutPlate.model:SetCreature(creatureID);
-				end
-			end
-				
 			loadoutPlate.petTypeIcon:SetTexture(GetPetTypeTexture(petType));	
 			loadoutPlate.petID = petID;
 			loadoutPlate.speciesID = speciesID;
@@ -534,40 +605,55 @@ function PetJournal_UpdatePetLoadOut()
 				
 			loadoutPlate.xpBar:SetMinMaxValues(0, maxXp);
 			loadoutPlate.xpBar:SetValue(xp);
-			loadoutPlate.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_VERBOSE, xp, maxXp);
+			if (GetCVarBool("statusTextPercentage")) then
+				loadoutPlate.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_PERCENT, xp/maxXp*100);
+			else
+				loadoutPlate.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_VERBOSE, xp, maxXp);
+			end
+			loadoutPlate.xpBar.tooltip = format(PET_BATTLE_CURRENT_XP_FORMAT_TOOLTIP, xp, maxXp, xp/maxXp*100);
 			
 			local health, maxHealth, _ = C_PetJournal.GetPetStats(petID);
-			loadoutPlate.healthBar:SetMinMaxValues(0, maxHealth);
-			loadoutPlate.healthBar:SetValue(health);
-			loadoutPlate.healthBar.healthRankText:SetFormattedText(PET_BATTLE_CURRENT_HEALTH_FORMAT_VERBOSE, health, maxHealth);
-			loadoutPlate.healthBar:Show();
-			if (health <= 0) then
-				loadoutPlate.isDead:Show();
-				loadoutPlate.model:SetAnimation(6,0);
-			else
-				loadoutPlate.isDead:Hide();
-				loadoutPlate.model:SetAnimation(0,0);
+			loadoutPlate.healthFrame.healthValue:SetFormattedText(PET_BATTLE_CURRENT_HEALTH_FORMAT, health, maxHealth);
+			loadoutPlate.healthFrame.healthBar:SetMinMaxValues(0, maxHealth);
+			loadoutPlate.healthFrame.healthBar:SetValue(health);
+			loadoutPlate.healthFrame:Show();
+
+			loadoutPlate.isDead:SetShown(health <= 0);
+			
+			loadoutPlate.model:Show();
+			local modelChanged = false;
+			if ( displayID ~= 0 ) then
+				if ( displayID ~= loadoutPlate.displayID ) then
+					loadoutPlate.creatureID = nil;
+					loadoutPlate.displayID = displayID;
+					loadoutPlate.model:SetDisplayInfo(displayID);
+					loadoutPlate.model:SetDoBlend(false);
+					modelChanged = true;
+				end
+			elseif ( creatureID ~= 0 ) then
+				if ( creatureID ~= loadoutPlate.creatureID ) then
+					loadoutPlate.creatureID = creatureID;
+					loadoutPlate.displayID = nil;
+					loadoutPlate.model:SetCreature(creatureID);
+					loadoutPlate.model:SetDoBlend(false);
+					modelChanged = true;
+				end
 			end
+			local isDead = health <= 0;
+			if ( modelChanged or isDead ~= loadoutPlate.model.wasDead ) then
+				if ( isDead ) then
+					loadoutPlate.model:SetAnimation(6,-1);
+				else
+					loadoutPlate.model:SetAnimation(0,-1);
+				end
+				loadoutPlate.model.wasDead = isDead;
+			end
+
 			
 			PetJournal_UpdatePetAbility(loadoutPlate.spell1, ability1ID, petID);
 			PetJournal_UpdatePetAbility(loadoutPlate.spell2, ability2ID, petID);
 			PetJournal_UpdatePetAbility(loadoutPlate.spell3, ability3ID, petID);
 
-			--[[Only show flyouts if the person already has the first 3 abilities.
-			if ( numUsableAbilities < 3 ) then
-				loadoutPlate.spell1.enabled = false;
-				loadoutPlate.spell2.enabled = false;
-				loadoutPlate.spell3.enabled = false;
-				loadoutPlate.spell1:GetHighlightTexture():SetAlpha(0);
-				loadoutPlate.spell2:GetHighlightTexture():SetAlpha(0);
-				loadoutPlate.spell3:GetHighlightTexture():SetAlpha(0);
-				loadoutPlate.spell1:GetPushedTexture():SetAlpha(0);
-				loadoutPlate.spell2:GetPushedTexture():SetAlpha(0);
-				loadoutPlate.spell3:GetPushedTexture():SetAlpha(0);
-				loadoutPlate.spell1.FlyoutArrow:Hide();
-				loadoutPlate.spell2.FlyoutArrow:Hide();
-				loadoutPlate.spell3.FlyoutArrow:Hide();
-			else]]
 			loadoutPlate.spell1.enabled = true;
 			loadoutPlate.spell2.enabled = true;
 			loadoutPlate.spell3.enabled = true;
@@ -582,8 +668,9 @@ function PetJournal_UpdatePetLoadOut()
 			loadoutPlate.spell3.FlyoutArrow:Show();
 
 			loadoutPlate.helpFrame:Hide();
-			loadoutPlate.requirementButton:Hide();
+			loadoutPlate.requirement:Hide();
 			loadoutPlate.emptyslot:Hide();
+			loadoutPlate.dragButton:Show();
 		end
 	end -- for i=1,MAX_ACTIVE_PETS do
 	
@@ -593,7 +680,7 @@ function PetJournal_UpdatePetLoadOut()
 end
 
 
-function PetJournalRequirementButton_ShowRequirementToolTip(self)
+function PetJournalRequirement_ShowRequirementToolTip(self)
 	if (self.achievementID) then
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -185, 0);
 		GameTooltip:SetAchievementByID(self.achievementID);
@@ -606,7 +693,8 @@ end
 function PetJournal_UpdateAll()
 	PetJournal_UpdatePetList();
 	PetJournal_UpdatePetLoadOut();
-	PetJournal_UpdatePetCard(PetJournal.PetCardList.MainCard);
+	PetJournal_UpdatePetCard(PetJournalPetCard);
+	PetJournal_HidePetDropdown();
 end
 
 function PetJournal_UpdatePetList()
@@ -626,7 +714,7 @@ function PetJournal_UpdatePetList()
 		pet = petButtons[i];
 		index = offset + i;
 		if index <= numPets then
-			local petID, speciesID, isOwned, customName, level, favorite, isRevoked, name, icon, petType, creatureID, sourceText, description, isWildPet = C_PetJournal.GetPetInfoByIndex(index, isWild);
+			local petID, speciesID, isOwned, customName, level, favorite, isRevoked, name, icon, petType, creatureID, sourceText, description, isWildPet, canBattle = C_PetJournal.GetPetInfoByIndex(index, isWild);
 
 			if customName then
 				pet.name:SetText(customName);
@@ -642,18 +730,21 @@ function PetJournal_UpdatePetList()
 			pet.petTypeIcon:SetTexture(GetPetTypeTexture(petType));
 			
 			if (favorite) then
-				pet.favorite:Show();
+				pet.dragButton.favorite:Show();
 			else
-				pet.favorite:Hide();
+				pet.dragButton.favorite:Hide();
 			end
 			
 			if isOwned then
 				local health, maxHealth, attack, speed, rarity = C_PetJournal.GetPetStats(petID);
-				pet.levelBG:Show();
-				pet.level:Show();
-				pet.level:SetText(level);
+
+				pet.dragButton.levelBG:SetShown(canBattle);
+				pet.dragButton.level:SetShown(canBattle);
+				pet.dragButton.level:SetText(level);
+				
 				pet.icon:SetDesaturated(0);
 				pet.name:SetFontObject("GameFontNormal");
+				pet.petTypeIcon:SetShown(canBattle);
 				pet.petTypeIcon:SetDesaturated(0);
 				pet.dragButton:Enable();
 				if (isWildPet) then
@@ -662,23 +753,26 @@ function PetJournal_UpdatePetList()
 				else
 					pet.iconBorder:Hide();
 				end
-				if (health <= 0) then
+				if (health and health <= 0) then
 					pet.isDead:Show();
 				else
 					pet.isDead:Hide();
 				end
 				if(isRevoked == true) then
-					pet.levelBG:Hide();
-					pet.level:Hide();
+					pet.dragButton.levelBG:Hide();
+					pet.dragButton.level:Hide();
+					pet.iconBorder:Hide();
 					pet.icon:SetDesaturated(1);
 					pet.petTypeIcon:SetDesaturated(1);
 					pet.dragButton:Disable();
 				end
 			else
-				pet.levelBG:Hide();
-				pet.level:Hide();
+				pet.dragButton.levelBG:Hide();
+				pet.dragButton.level:Hide();
 				pet.icon:SetDesaturated(1);
+				pet.iconBorder:Hide();
 				pet.name:SetFontObject("GameFontDisable");
+				pet.petTypeIcon:SetShown(canBattle);
 				pet.petTypeIcon:SetDesaturated(1);
 				pet.dragButton:Disable();
 				pet.isDead:Hide();
@@ -695,12 +789,9 @@ function PetJournal_UpdatePetList()
 			pet.index = index;
 			pet.owned = isOwned;
 			pet:Show();
-			if pet.showingTooltip then
-				GameTooltip:SetItemByID(petID);
-			end
 			
 			--Update Petcard Button
-			if PetJournal.pcIndex == index then
+			if PetJournalPetCard.petIndex == index then
 				pet.selected = true;
 				pet.selectedTexture:Show();
 			else
@@ -727,9 +818,40 @@ function PetJournal_OnSearchTextChanged(self)
 	C_PetJournal.SetSearchFilter(text);
 end
 
+function PetJournalListItem_OnClick(self, button)
+	if ( IsModifiedClick("CHATLINK") ) then
+		local id = self.petID;
+		if ( id and MacroFrame and MacroFrame:IsShown() ) then
+			-- Macros are not yet supported
+		elseif (id) then
+			local petLink = C_PetJournal.GetBattlePetLink(id);
+			ChatEdit_InsertLink(petLink);
+		end
+	elseif button == "RightButton" then
+		if self.owned then
+			PetJournal_ShowPetDropdown(self.index, self, 80, 20);
+		end
+	else
+		local type, petID = GetCursorInfo();
+		if type == "battlepet" then
+			PetJournal_UpdatePetLoadOut();
+			ClearCursor();
+		else
+			PetJournal_ShowPetCard(self.index);
+		end
+	end
+end
 
 function PetJournalDragButton_OnClick(self, button)
-	if ( button == "RightButton" ) then
+	if ( IsModifiedClick("CHATLINK") ) then
+		local id = self:GetParent().petID;
+		if ( id and MacroFrame and MacroFrame:IsShown() ) then
+			-- Macros are not yet supported
+		elseif (id) then
+			local petLink = C_PetJournal.GetBattlePetLink(id);
+			ChatEdit_InsertLink(petLink);
+		end
+	elseif ( button == "RightButton" ) then
 		local parent = self:GetParent();
 		if ( parent.owned ) then
 			PetJournal_ShowPetDropdown(parent.index, self, 0, 0);
@@ -745,11 +867,26 @@ function PetJournalDragButton_OnClick(self, button)
 	end
 end
 
+function PetJournalPetLoadoutDragButton_OnClick(self)
+	if ( IsModifiedClick("CHATLINK") ) then
+		local id = self:GetParent().petID;
+		if ( id and MacroFrame and MacroFrame:IsShown() ) then
+			-- Macros are not yet supported
+		elseif (id) then
+			local petLink = C_PetJournal.GetBattlePetLink(id);
+			ChatEdit_InsertLink(petLink);
+		end
+	else
+		PetJournalDragButton_OnDragStart(self);
+	end
+end
+
 function PetJournalDragButton_OnDragStart(self)
 	if (not self:GetParent().petID or self:GetParent().petID == 0) then
 		return;
 	end
-	
+
+	PetJournal_HidePetDropdown();
 	C_PetJournal.PickupPet(self:GetParent().petID, PetJournal.isWild);
 
 	for i=1,MAX_ACTIVE_PETS do
@@ -764,208 +901,285 @@ function PetJournalDragButton_OnDragStart(self)
 end
 
 function PetJournal_ShowPetDropdown(index, anchorTo, offsetX, offsetY)
+	if (not index) then
+		return;
+	end
+	
 	PetJournal.menuPetIndex = index;
 	PetJournal.menuPetID = C_PetJournal.GetPetInfoByIndex(index);
 	ToggleDropDownMenu(1, nil, PetJournal.petOptionsMenu, anchorTo, offsetX, offsetY);
 end
 
+function PetJournal_HidePetDropdown()
+	if (UIDropDownMenu_GetCurrentDropDown() == PetJournal.petOptionsMenu) then
+		HideDropDownMenu(1);
+	end
+end
 
-function PetJournal_TogglePetCardByID(petID)
-	PetJournal.pcPetID = petID;
-	PetJournal.pcSpeciesID = C_PetJournal.GetPetInfoByPetID(petID);
+function PetJournal_ShowPetCardByID(petID)
+	if (not petID) then
+		PetJournal_ShowPetCard(1);
+		return;
+	end
+
+	PetJournal_HidePetDropdown();
+	
+	PetJournalPetCard.petID = petID;
+	PetJournalPetCard.speciesID = C_PetJournal.GetPetInfoByPetID(petID);
 	
 	PetJournal_FindPetCardIndex();
-	PetJournal_UpdatePetCard(PetJournal.PetCardList.MainCard);
-	PetJournal.PetCardList:Show();
+	PetJournal_UpdatePetCard(PetJournalPetCard);
 	PetJournal_UpdatePetList();
 	PetJournal_UpdateSummonButtonState();
 end
 
-
-function PetJournal_TogglePetCard(index)
-	PlaySound("igAbiliityPageTurn");
-	if PetJournal.PetCardList:IsShown() and PetJournal.pcIndex == index then
-		PetJournal_HidePetCard()
-	else
-		PetJournal.pcIndex = index;
-		PetJournal.pcPetID, PetJournal.pcSpeciesID, owned = C_PetJournal.GetPetInfoByIndex(index, PetJournal.isWild);		
-		if not owned then
-			PetJournal.pcPetID = nil;
-		end
-		PetJournal_UpdatePetCard(PetJournal.PetCardList.MainCard);
-		PetJournal.PetCardList:Show();
-		PetJournal_UpdatePetList();
-		PetJournal_UpdateSummonButtonState();
+function PetJournal_ShowPetCardBySpeciesID(speciesID)
+	if (not speciesID) then
+		PetJournal_ShowPetCard(1);
+		return;
 	end
+
+	PetJournal_HidePetDropdown();
+	
+	PetJournalPetCard.petID = nil;
+	PetJournalPetCard.speciesID = speciesID;
+	
+	PetJournal_FindPetCardIndex();
+	PetJournal_UpdatePetCard(PetJournalPetCard);
+	PetJournal_UpdatePetList();
+	PetJournal_UpdateSummonButtonState();
 end
 
+function PetJournal_ShowPetCard(index)
+	PetJournal_HidePetDropdown();
+	PetJournalPetCard.petIndex = index;
+	PetJournalPetCard.petID, PetJournalPetCard.speciesID, owned = C_PetJournal.GetPetInfoByIndex(index, PetJournal.isWild);		
+	if not owned then
+		PetJournalPetCard.petID = nil;
+	end
+	PetJournal_UpdatePetCard(PetJournalPetCard);
+	PetJournal_UpdatePetList();
+	PetJournal_UpdateSummonButtonState();
+end
 
 function PetJournal_FindPetCardIndex()
-	PetJournal.pcIndex = nil;
+	PetJournalPetCard.petIndex = nil;
 	local numPets = C_PetJournal.GetNumPets(PetJournal.isWild);
 	for i = 1,numPets do
 		local petID, speciesID, owned = C_PetJournal.GetPetInfoByIndex(i, isWild);
-		if (owned and petID == PetJournal.pcPetID) or
-			(not owned and speciesID == PetJournal.pcSpeciesID)  then
-			PetJournal.pcIndex = i;
+		if (owned and petID == PetJournalPetCard.petID) or
+			(not owned and speciesID == PetJournalPetCard.speciesID)  then
+			PetJournalPetCard.petIndex = i;
 			break;
 		end
 	end
 end
 
+function PetJournalPetCard_OnClick(self, button)
+	local type, petID = GetCursorInfo();
+	if type == "battlepet" then
+		ClearCursor();
+		return;
+	end
 
-function PetJournal_HidePetCard()
-	PetJournal.PetCardList:Hide();
-	PetJournal.pcIndex = nil;
-	PetJournal.pcPetID = nil;
-	PetJournal.pcSpeciesID = nil;
-	PetJournal_UpdatePetList();
-	PetJournal_UpdateSummonButtonState();
+	if ( IsModifiedClick("CHATLINK") ) then
+		local id = PetJournalPetCard.petID;
+		if ( id and MacroFrame and MacroFrame:IsShown() ) then
+			-- Macros are not yet supported
+		elseif (id) then
+			local petLink = C_PetJournal.GetBattlePetLink(id);
+			ChatEdit_InsertLink(petLink);
+		end
+	elseif button == "RightButton" then
+		if ( PetJournalPetCard.petID ) then
+			PetJournal_ShowPetDropdown(PetJournalPetCard.petIndex, self, 0, 0);
+		end
+	else
+		PetJournalDragButton_OnDragStart(self);
+	end
 end
-
 
 function PetJournal_UpdatePetCard(self)
 	PetJournal.SpellSelect:Hide();
 	
-	if (not PetJournal.pcPetID and not PetJournal.pcSpeciesID) then
+	if (not PetJournalPetCard.petID and not PetJournalPetCard.speciesID) then
+		--Select a pet from the list on the left
+		self.PetInfo.name:SetText(PET_JOURNAL_CARD_NAME_DEFAULT);
+		self.PetInfo.subName:SetText("");
+		self.PetInfo.subName:Hide();
+		self.PetInfo.level:Hide();
+		self.PetInfo.levelBG:Hide();
+		
+		self.TypeInfo:Hide();
+		
+		self.model:Hide();
+		self.shadows:Hide();
+		
+		self.AbilitiesBG:Hide();
+		self.CannotBattleText:Hide();
+		for i=1,NUM_PET_ABILITIES do
+			self["spell"..i]:Hide();
+		end
+		
+		self.HealthFrame:Hide();
+		self.PowerFrame:Hide();
+		self.SpeedFrame:Hide();
+		self.QualityFrame:Hide();
+
+		self.xpBar:Hide();
 		return;
 	end
 
 	local isDead = false;
-	local speciesID, customName, level, name, icon, petType, creatureID, xp, maxXp, displayID, sourceText, description, isWild, _;
-	if PetJournal.pcPetID then
-		speciesID, customName, level, xp, maxXp, displayID, name, icon, petType, creatureID, sourceText, description, isWild = C_PetJournal.GetPetInfoByPetID(PetJournal.pcPetID);
+	local speciesID, customName, level, name, icon, petType, creatureID, xp, maxXp, displayID, sourceText, description, isWild, canBattle, tradable;
+	if PetJournalPetCard.petID then
+		speciesID, customName, level, xp, maxXp, displayID, name, icon, petType, creatureID, sourceText, description, isWild, canBattle, tradable = C_PetJournal.GetPetInfoByPetID(PetJournalPetCard.petID);
 		if ( not speciesID ) then
-			--We no longer have this pet. (We may have just released it.)
-			PetJournal_HidePetCard();
 			return;
 		end
-		self.level:SetText(level);
-		self.level:Show();
-		self.levelBG:Show();
-		self.xpBar:Show();
-		self.xpBar:SetMinMaxValues(0, maxXp);
-		self.xpBar:SetValue(xp);
-		self.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_VERBOSE, xp, maxXp);
+			
+		self.PetInfo.level:SetShown(canBattle);
+		self.PetInfo.levelBG:SetShown(canBattle);
+		self.PetInfo.level:SetText(level);
+		
+		self.xpBar:SetShown(level < MAX_PET_LEVEL and canBattle);
+		if (level < MAX_PET_LEVEL) then
+			self.xpBar:SetMinMaxValues(0, maxXp);
+			self.xpBar:SetValue(xp);
+			if (GetCVarBool("statusTextPercentage")) then
+				self.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_PERCENT, xp/maxXp*100);
+			else
+				self.xpBar.rankText:SetFormattedText(PET_BATTLE_CURRENT_XP_FORMAT_VERBOSE, xp, maxXp);
+			end
+			self.xpBar.tooltip = format(PET_BATTLE_CURRENT_XP_FORMAT_TOOLTIP, xp, maxXp, xp/maxXp*100);
+		end
 		
 		--Stats
-		local health, maxHealth, attack, speed, rarity = C_PetJournal.GetPetStats(PetJournal.pcPetID);
-		self.statsFrame:Show();
-		self.powerFrame:Show();
-		self.speedFrame:Show();
+		local health, maxHealth, power, speed, rarity = C_PetJournal.GetPetStats(PetJournalPetCard.petID);
+		self.HealthFrame:SetShown(canBattle);
+		self.PowerFrame:SetShown(canBattle);
+		self.SpeedFrame:SetShown(canBattle);
 
-		self.healthBar:Show();
-		self.healthBar:SetMinMaxValues(0, maxHealth);
-		self.healthBar:SetValue(health);
-		self.healthBar.healthRankText:SetFormattedText(PET_BATTLE_CURRENT_HEALTH_FORMAT_VERBOSE, health, maxHealth);
-		if (health <= 0) then
-			isDead = true;
-			self.isDead:Show();
-		else
-			isDead = false;
-			self.isDead:Hide();
-		end
+		self.HealthFrame.healthBar:SetMinMaxValues(0, maxHealth);
+		self.HealthFrame.healthBar:SetValue(health);
+		self.HealthFrame.health:SetText(maxHealth);
 		
-		self.powerFrame.attackValue:SetText(attack);
-		self.speedFrame.speedValue:SetText(speed);
-		if ( isWild ) then
-			self.rarityFrame.rarityValue:SetText(_G["BATTLE_PET_BREED_QUALITY"..rarity]);
+		isDead = health <= 0;
+		
+		self.PowerFrame.power:SetText(power);
+		self.SpeedFrame.speed:SetText(speed);
+		if ( isWild and canBattle ) then
+			self.QualityFrame.quality:SetText(_G["BATTLE_PET_BREED_QUALITY"..rarity]);
 			local color = ITEM_QUALITY_COLORS[rarity-1];
-			self.rarityFrame.rarityValue:SetVertexColor(color.r, color.g, color.b);
-			self.rarityFrame:Show();
+			self.QualityFrame.quality:SetVertexColor(color.r, color.g, color.b);
+			self.QualityFrame:Show();
 		else
-			self.rarityFrame:Hide();
+			self.QualityFrame:Hide();
 		end
 	else
-		speciesID = PetJournal.pcSpeciesID;
-		name, icon, petType, creatureID, sourceText, description, isWild = C_PetJournal.GetPetInfoBySpeciesID(PetJournal.pcSpeciesID);
+		speciesID = PetJournalPetCard.speciesID;
+		name, icon, petType, creatureID, sourceText, description, isWild, canBattle, tradable = C_PetJournal.GetPetInfoBySpeciesID(PetJournalPetCard.speciesID);
 		level = 1;
-		self.level:Hide();
-		self.healthBar:Hide();
-		self.levelBG:Hide();
+		self.PetInfo.level:Hide();
+		self.PetInfo.levelBG:Hide();
+		
 		self.xpBar:Hide();
-		self.statsFrame:Hide();
-		self.powerFrame:Hide();
-		self.speedFrame:Hide();
-		self.rarityFrame:Hide();
+		self.HealthFrame:Hide();
+		self.PowerFrame:Hide();
+		self.SpeedFrame:Hide();
+		self.QualityFrame:Hide();
 	end
+	self.PetInfo.isDead:SetShown(isDead);
 
-	self.PetTypeFrame.Label:SetText(_G["BATTLE_PET_NAME_"..petType]);
-	self.PetTypeFrame.Icon:SetTexture("Interface\\PetBattles\\PetIcon-"..PET_TYPE_SUFFIX[petType]);
-	self.PetTypeFrame.abilityID = PET_BATTLE_PET_TYPE_PASSIVES[petType];
-	self.PetTypeFrame.petID = PetJournal.pcPetID;
-	self.PetTypeFrame.speciesID = speciesID;
+	self.TypeInfo:SetShown(canBattle);
+	
+	self.TypeInfo.type:SetText(_G["BATTLE_PET_NAME_"..petType]);
+	self.TypeInfo.typeIcon:SetTexture("Interface\\PetBattles\\PetIcon-"..PET_TYPE_SUFFIX[petType]);
+	self.TypeInfo.abilityID = PET_BATTLE_PET_TYPE_PASSIVES[petType];
+	self.TypeInfo.petID = PetJournalPetCard.petID;
+	self.TypeInfo.speciesID = speciesID;
 	
 	if customName then
-		self.name:SetText(customName);
-		self.name:SetHeight(12);
-		self.subName:Show();
-		self.subName:SetText(name);
+		self.PetInfo.name:SetText(customName);
+		self.PetInfo.name:SetHeight(24);
+		self.PetInfo.subName:Show();
+		self.PetInfo.subName:SetText(name);
 	else
-		self.name:SetText(name);
-		self.name:SetHeight(30);
-		self.subName:Hide();
+		self.PetInfo.name:SetText(name);
+		self.PetInfo.name:SetHeight(32);
+		self.PetInfo.subName:Hide();
 	end
 	
-	self.icon:SetTexture(icon);
+	self.PetInfo.icon:SetTexture(icon);
 
-	self.Location.sourceText = sourceText;
+	self.PetInfo.sourceText = sourceText;
+	self.PetInfo.tradable = tradable;
+
 	if ( description ~= "" ) then
-		self.Location.description = format([["%s"]], description);
+		self.PetInfo.description = format([["%s"]], description);
 	else
-		self.Location.description = nil;
+		self.PetInfo.description = nil;
 	end
-	self.Location.speciesName = name;
-	
+	self.PetInfo.speciesName = name;
+
+	Model_Reset(self.model);
 	self.model:Show();
+	self.shadows:Show();
+	local modelChanged = false;
 	if ( displayID and displayID ~= 0 ) then
 		if ( displayID ~= self.displayID ) then
 			self.creatureID = nil;
 			self.displayID = displayID;
 			self.model:SetDisplayInfo(displayID);
+			self.model:SetDoBlend(false);
+			modelChanged = true;
 		end
 	elseif ( creatureID ~= 0 ) then
 		if ( creatureID ~= self.creatureID ) then
 			self.creatureID = creatureID;
 			self.displayID = nil;
 			self.model:SetCreature(creatureID);
+			self.model:SetDoBlend(false);
+			modelChanged = true;
 		end
 	end
-	if (isDead) then
-		self.model:SetAnimation(6,0);
-	else
-		self.model:SetAnimation(0,0);
+	if ( modelChanged or self.model.wasDead ~= isDead ) then
+		if ( isDead ) then
+			self.model:SetAnimation(6,-1);
+		else
+			self.model:SetAnimation(0,-1);
+		end
+		self.model.wasDead = isDead;
 	end
-		
-	self.petTypeIcon:SetTexture(GetPetTypeTexture(petType) );
+	
+	self.AbilitiesBG:SetShown(canBattle);
+	self.CannotBattleText:SetShown(not canBattle);
 	
 	--Update pet abilites
 	local abilities, levels = C_PetJournal.GetPetAbilityList(speciesID);
 	for i=1,NUM_PET_ABILITIES do
 		local spellFrame = self["spell"..i];
-		if abilities[i] then
+		if abilities[i] and canBattle then
 			local name, icon, petType = C_PetJournal.GetPetAbilityInfo(abilities[i]);
 			local isNotUsable = not level or level < levels[i];
-			spellFrame.name:SetText(name);
 			spellFrame.icon:SetTexture(icon);
 			spellFrame.icon:SetDesaturated(isNotUsable);
-			spellFrame.petTypeIcon:SetTexture(GetPetTypeTexture(petType) );
 			spellFrame.LevelRequirement:SetText(levels[i]);
 			spellFrame.LevelRequirement:SetShown(isNotUsable);
 			spellFrame.BlackCover:SetShown(isNotUsable);
 			if (not level or level < levels[i]) then
 				spellFrame.additionalText = format(PET_ABILITY_REQUIRES_LEVEL, levels[i]);
+			else
+				spellFrame.additionalText = nil;
 			end
 			spellFrame.abilityID = abilities[i];
-			spellFrame.petID = PetJournal.pcPetID;
+			spellFrame.petID = PetJournalPetCard.petID;
 			spellFrame.speciesID = speciesID;
 			spellFrame:Show();
 		else
 			spellFrame:Hide();
 		end
 	end
-	
-	Model_Reset(self.model);
 end
 
 
@@ -984,21 +1198,20 @@ end
 
 
 function PetJournalFilterDropDown_Initialize(self, level)
-	
 	local info = UIDropDownMenu_CreateInfo();
-	
+	info.keepShownOnClick = true;	
+
 	if level == 1 then
 	
 		info.text = COLLECTED
 		info.func = 	function(_, _, _, value)
 							C_PetJournal.SetFlagFilter(LE_PET_JOURNAL_FLAG_COLLECTED, value);
 							if (value) then
-								UIDropDownMenu_EnableButton(1, 2);
+								UIDropDownMenu_EnableButton(1,2);
 							else
-								UIDropDownMenu_DisableButton(1,2 );
+								UIDropDownMenu_DisableButton(1,2);
 							end;
 						end 
-		info.keepShownOnClick = true;
 		info.checked = not C_PetJournal.IsFlagFiltered(LE_PET_JOURNAL_FLAG_COLLECTED);
 		info.isNotRadio = true;
 		UIDropDownMenu_AddButton(info, level)
@@ -1008,7 +1221,6 @@ function PetJournalFilterDropDown_Initialize(self, level)
 							C_PetJournal.SetFlagFilter(LE_PET_JOURNAL_FLAG_FAVORITES, value);
 						end 
 		info.disabled = not info.checked or info.checked ~= true;
-		info.keepShownOnClick = true;
 		info.checked = not C_PetJournal.IsFlagFiltered(LE_PET_JOURNAL_FLAG_FAVORITES);
 		info.isNotRadio = true;
 		info.leftPadding = 16;
@@ -1020,12 +1232,10 @@ function PetJournalFilterDropDown_Initialize(self, level)
 		info.func = 	function(_, _, _, value)
 							C_PetJournal.SetFlagFilter(LE_PET_JOURNAL_FLAG_NOT_COLLECTED, value);
 						end 
-		info.keepShownOnClick = true;
 		info.checked = not C_PetJournal.IsFlagFiltered(LE_PET_JOURNAL_FLAG_NOT_COLLECTED);
 		info.isNotRadio = true;
 		UIDropDownMenu_AddButton(info, level)
 	
-		info.keepShownOnClick = true;
 		info.checked = 	nil;
 		info.isNotRadio = nil;
 		info.func =  nil;
@@ -1045,7 +1255,6 @@ function PetJournalFilterDropDown_Initialize(self, level)
 			info.hasArrow = false;
 			info.isNotRadio = true;
 			info.notCheckable = true;
-			info.keepShownOnClick = true;
 				
 		
 			info.text = CHECK_ALL
@@ -1076,7 +1285,6 @@ function PetJournalFilterDropDown_Initialize(self, level)
 			info.hasArrow = false;
 			info.isNotRadio = true;
 			info.notCheckable = true;
-			info.keepShownOnClick = true;
 				
 		
 			info.text = CHECK_ALL
@@ -1112,41 +1320,63 @@ function PetOptionsMenu_Init(self, level)
 	local info = UIDropDownMenu_CreateInfo();
 	info.notCheckable = true;
 	
-	info.text = BATTLE_PET_SUMMON
+	info.text = BATTLE_PET_SUMMON;
+	if (PetJournal.menuPetID and C_PetJournal.GetSummonedPetID() == PetJournal.menuPetID) then
+		info.text = PET_DISMISS;
+	end
 	info.func = function() C_PetJournal.SummonPetByID(PetJournal.menuPetID); end
 	if (PetJournal.menuPetID and not C_PetJournal.PetIsSummonable(PetJournal.menuPetID)) then
 		info.disabled = true;
 	end
-	UIDropDownMenu_AddButton(info, level)
+	UIDropDownMenu_AddButton(info, level);
 	info.disabled = nil;
 	
 	info.text = BATTLE_PET_RENAME
 	info.func = 	function() StaticPopup_Show("BATTLE_PET_RENAME", nil, nil, PetJournal.menuPetID); end 
-	UIDropDownMenu_AddButton(info, level)
+	info.disabled = not C_PetJournal.IsJournalUnlocked();
+	UIDropDownMenu_AddButton(info, level);
+	info.disabled = nil;
 
 	if (PetJournal.menuPetID and C_PetJournal.PetIsFavorite(PetJournal.menuPetID)) then
 		info.text = BATTLE_PET_UNFAVORITE;
 		info.func = function() 
 			C_PetJournal.SetFavorite(PetJournal.menuPetID, 0); 
 		end
-		UIDropDownMenu_AddButton(info, level)
 	else
 		info.text = BATTLE_PET_FAVORITE;
 		info.func = function() 
 			C_PetJournal.SetFavorite(PetJournal.menuPetID, 1); 
 		end
-		UIDropDownMenu_AddButton(info, level)
 	end
+	info.disabled = not C_PetJournal.IsJournalUnlocked();
+	UIDropDownMenu_AddButton(info, level);
+	info.disabled = nil;
 	
-	if(PetJournal.menuPetID and C_PetJournal.PetIsTradable(PetJournal.menuPetID)) then
+	-- any pet that has the capturable flag can be released
+	if(PetJournal.menuPetID and C_PetJournal.PetIsCapturable(PetJournal.menuPetID)) then
 		info.text = BATTLE_PET_RELEASE;
 		info.func = function() StaticPopup_Show("BATTLE_PET_RELEASE", PetJournalUtil_GetDisplayName(PetJournal.menuPetID), nil, PetJournal.menuPetID); end
-		UIDropDownMenu_AddButton(info, level)
-	
-		info.text = BATTLE_PET_PUT_IN_CAGE;
-		info.func = function() StaticPopup_Show("BATTLE_PET_PUT_IN_CAGE", nil, nil, PetJournal.menuPetID); end 
-		if (not C_PetJournal.PetIsCagable(PetJournal.menuPetID)) then
+		if (C_PetJournal.PetIsSlotted(PetJournal.menuPetID)) then
 			info.disabled = true;
+		else
+			info.disabled = nil; 
+		end
+		UIDropDownMenu_AddButton(info, level);
+		info.disabled = nil; 
+	end
+
+	if(PetJournal.menuPetID and C_PetJournal.PetIsTradable(PetJournal.menuPetID)) then
+		info.text = BATTLE_PET_PUT_IN_CAGE;
+		info.func = function() StaticPopup_Show("BATTLE_PET_PUT_IN_CAGE", nil, nil, PetJournal.menuPetID); end
+		--only if it isn't in a battle slot and has full health
+		info.disabled = nil;
+		if (not info.disabled and C_PetJournal.PetIsSlotted(PetJournal.menuPetID)) then
+			info.disabled = true;
+			info.text = BATTLE_PET_PUT_IN_CAGE_SLOTTED;
+		end
+		if (not info.disabled and C_PetJournal.PetIsHurt(PetJournal.menuPetID)) then
+			info.disabled = true;
+			info.text = BATTLE_PET_PUT_IN_CAGE_HEALTH;
 		end
 		UIDropDownMenu_AddButton(info, level)
 		info.disabled = nil;
@@ -1161,18 +1391,10 @@ end
 -------Ability Tooltip stuff-----------
 ---------------------------------------
 
-local PET_JOURNAL_ABILITY_INFO = {};
+local PET_JOURNAL_ABILITY_INFO = SharedPetBattleAbilityTooltip_GetInfoTable();
 
 function PET_JOURNAL_ABILITY_INFO:GetAbilityID()
 	return self.abilityID;
-end
-
-function PET_JOURNAL_ABILITY_INFO:GetCooldown()
-	return 0;
-end
-
-function PET_JOURNAL_ABILITY_INFO:GetRemainingDuration()
-	return 0;
 end
 
 function PET_JOURNAL_ABILITY_INFO:IsInBattle()
@@ -1223,13 +1445,26 @@ function PET_JOURNAL_ABILITY_INFO:GetSpeedStat(target)
 	end
 end
 
-function PET_JOURNAL_ABILITY_INFO:GetState(stateID, target)
-	return 0;
+function PET_JOURNAL_ABILITY_INFO:GetPetOwner(target)
+	self:EnsureTarget(target);
+	return LE_BATTLE_PET_ALLY;
+end
+
+function PET_JOURNAL_ABILITY_INFO:GetPetType(target)
+	self:EnsureTarget(target);
+	if ( not self.speciesID ) then
+		GMError("No species id found");
+		return 1;
+	end
+	local name, icon, petType, creatureID, sourceText, description, isWild, canBattle, tradable = C_PetJournal.GetPetInfoBySpeciesID(self.speciesID);
+	return petType;
 end
 
 function PET_JOURNAL_ABILITY_INFO:EnsureTarget(target)
 	if ( target == "default" ) then
 		target = "self";
+	elseif ( target == "affected" ) then
+		target = "enemy";
 	end
 	if ( target ~= "self" ) then
 		GMError("Only \"self\" unit supported out of combat");
@@ -1245,7 +1480,7 @@ function PetJournal_ShowAbilityTooltip(self, abilityID, speciesID, petID, additi
 		journalAbilityInfo.speciesID = speciesID;
 		journalAbilityInfo.petID = petID;
 		PetJournalPrimaryAbilityTooltip:ClearAllPoints();
-		PetJournalPrimaryAbilityTooltip:SetPoint("TOPRIGHT", self, "TOPLEFT", -5, 0);
+		PetJournalPrimaryAbilityTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 5, 0);
 		PetJournalPrimaryAbilityTooltip.anchoredTo = self;
 		SharedPetBattleAbilityTooltip_SetAbility(PetJournalPrimaryAbilityTooltip, journalAbilityInfo, additionalText);
 		PetJournalPrimaryAbilityTooltip:Show();
@@ -1307,11 +1542,31 @@ function PetJournalPetCount_OnEnter(self)
 	GameTooltip:Show();
 end
 
+function PetJournalFindBattle_Update(self)
+	local queueState = C_PetBattles.GetPVPMatchmakingInfo();
+	if ( queueState == "queued" or queueState == "proposal" or queueState == "suspended" ) then
+		self:SetText(LEAVE_QUEUE);
+	else
+		self:SetText(FIND_BATTLE);
+	end
+end
+
+function PetJournal_UpdateFindBattleButton()
+	PetJournal.FindBattleButton:SetEnabled(C_PetJournal.IsFindBattleEnabled() and C_PetJournal.IsJournalUnlocked());
+end
+
 function PetJournalFindBattle_OnEnter(self)
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 	GameTooltip:SetMinimumWidth(150);
 	GameTooltip:SetText(FIND_BATTLE, 1, 1, 1);
 	GameTooltip:AddLine(BATTLE_PETS_FIND_BATTLE_TOOLTIP, nil, nil, nil, true);
+	
+	if (not C_PetJournal.IsFindBattleEnabled()) then
+		GameTooltip:AddLine(BATTLE_PET_FIND_BATTLE_DISABLED, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, true);
+	elseif (not C_PetJournal.IsJournalUnlocked()) then
+		GameTooltip:AddLine(BATTLE_PET_FIND_BATTLE_READONLY, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, true);
+	end
+	
 	GameTooltip:Show();
 end
 
@@ -1337,12 +1592,14 @@ end
 ---------------------------------------
 
 PetJournal_HelpPlate = {
-	FramePos = { x = 0,	y = -22 },
-	FrameSize = { width = 700, height = 580	},
-	[1] = { ButtonPos = { x = 26,	y = -75 },	HighLightBox = { x = 10, y = -75, width = 247, height = 50 },	ToolTipDir = "RIGHT",	ToolTipText = PET_JOURNAL_HELP_1 },
-	[2] = { ButtonPos = { x = 105,	y = -300 },	HighLightBox = { x = 10, y = -128, width = 247, height = 425 },	ToolTipDir = "DOWN",	ToolTipText = PET_JOURNAL_HELP_2 },
-	[3] = { ButtonPos = { x = 470,	y = -95 },	HighLightBox = { x = 290, y = -45, width = 400, height = 508 },	ToolTipDir = "DOWN",	ToolTipText = PET_JOURNAL_HELP_3 },
-	[4] = { ButtonPos = { x = 525,	y = -546},	HighLightBox = { x = 550, y = -556, width = 150, height = 26 },	ToolTipDir = "UP",		ToolTipText = PET_JOURNAL_HELP_4 },
+	FramePos = { x = 0,          y = -22 },
+	FrameSize = { width = 700, height = 580 },
+	[1] = { ButtonPos = { x = 26,	y = -75 },  HighLightBox = { x = 10, y = -72, width = 247, height = 50 },	 ToolTipDir = "RIGHT",  ToolTipText = PET_JOURNAL_HELP_1 },
+	[2] = { ButtonPos = { x = 105,  y = -300 }, HighLightBox = { x = 10, y = -125, width = 247, height = 430 },  ToolTipDir = "DOWN",   ToolTipText = PET_JOURNAL_HELP_2 },
+	[3] = { ButtonPos = { x = 470,  y = -245 }, HighLightBox = { x = 290, y = -215, width = 400, height = 340 }, ToolTipDir = "DOWN",   ToolTipText = PET_JOURNAL_HELP_3 },
+	[4] = { ButtonPos = { x = 525,  y = -546},  HighLightBox = { x = 550, y = -556, width = 150, height = 26 },  ToolTipDir = "UP",		ToolTipText = PET_JOURNAL_HELP_4 },
+	[5] = { ButtonPos = { x = 470,  y = -95 },  HighLightBox = { x = 290, y = -45, width = 400, height = 160 },  ToolTipDir = "RIGHT",  ToolTipText = PET_JOURNAL_HELP_5 },
+	[6] = { ButtonPos = { x = 525,  y = 0 },	HighLightBox = { x = 550, y = 0, width = 150, height = 40 },     ToolTipDir = "LEFT",   ToolTipText = PET_JOURNAL_HELP_6 },
 }
 
 function PetJournal_ToggleTutorial()
@@ -1417,10 +1674,6 @@ function MountJournal_UpdateMountList()
 			end
 			button:Show();
 			
-			if ( button.showingTooltip ) then
-				GameTooltip:SetSpellByID(spellID);
-			end
-
 			if ( MountJournal.selectedSpellID == spellID ) then
 				button.selected = true;
 				button.selectedTexture:Show();
@@ -1431,14 +1684,20 @@ function MountJournal_UpdateMountList()
 			button:SetEnabled(1);
 			if (playerLevel >= PLAYER_MOUNT_LEVEL) then
 				button.DragButton:SetEnabled(1);
+				button.additionalText = nil;
 				button.icon:SetDesaturated(0);
 				button.icon:SetAlpha(1.0);
 				button.name:SetFontObject("GameFontNormal");				
 			else
 				button.DragButton:SetEnabled(0);
+				button.additionalText = MOUNT_JOURNAL_CANT_USE;
 				button.icon:SetDesaturated(1);
 				button.icon:SetAlpha(.5);
 				button.name:SetFontObject("GameFontDisable");				
+			end
+
+			if ( button.showingTooltip ) then
+				MountJournalMountButton_UpdateTooltip(button);
 			end
 		else
 			button.icon:SetTexture("Interface\\PetBattles\\MountJournalEmptyIcon");
@@ -1469,6 +1728,14 @@ function MountJournal_UpdateMountList()
 	end
 end
 
+function MountJournalMountButton_UpdateTooltip(self)
+	GameTooltip:SetSpellByID(self.spellID);
+	if (self.additionalText) then
+		GameTooltip:AddLine(self.additionalText, 1, 0.1, 0.1, true);
+		GameTooltip:Show();
+	end
+end
+
 function MountJournal_UpdateMountDisplay()
 	local index = MountJournal_FindSelectedIndex();
 
@@ -1482,6 +1749,9 @@ function MountJournal_UpdateMountDisplay()
 
 		MountJournal.MountDisplay.Name:Show();
 		MountJournal.MountDisplay.ModelFrame:Show();
+		MountJournal.MountDisplay.YesMountsTex:Show();
+		MountJournal.MountDisplay.NoMountsTex:Hide();
+		MountJournal.MountDisplay.NoMounts:Hide();
 
 		if ( active ) then
 			MountJournal.MountButton:SetText(BINDING_NAME_DISMOUNT);
@@ -1491,6 +1761,9 @@ function MountJournal_UpdateMountDisplay()
 	else
 		MountJournal.MountDisplay.Name:Hide();
 		MountJournal.MountDisplay.ModelFrame:Hide();
+		MountJournal.MountDisplay.YesMountsTex:Hide();
+		MountJournal.MountDisplay.NoMountsTex:Show();
+		MountJournal.MountDisplay.NoMounts:Show();
 	end
 end
 

@@ -1276,7 +1276,7 @@ function AchievementButton_DisplayAchievement (button, category, achievement, se
 		button.hiddenDescription:SetText(description);
 		button.numLines = ceil(button.hiddenDescription:GetHeight() / ACHIEVEMENTUI_FONTHEIGHT);
 		button.icon.texture:SetTexture(icon);
-		if ( completed ) then
+		if ( completed or wasEarnedByMe ) then
 			button.completed = true;
 			button.dateCompleted:SetText(string.format(SHORTDATE, day, month, year));
 			button.dateCompleted:Show();
@@ -1323,8 +1323,8 @@ function AchievementButton_DisplayAchievement (button, category, achievement, se
 		achievements.selection = button.id;
 		achievements.selectionIndex = button.index;
 		button.selected = true;
-		button.highlight:Show();		
-		local height = AchievementButton_DisplayObjectives(button, button.id, wasEarnedByMe);
+		button.highlight:Show();
+		local height = AchievementButton_DisplayObjectives(button, button.id, button.completed);
 		if ( height == ACHIEVEMENTBUTTON_COLLAPSEDHEIGHT ) then
 			button:Collapse();
 		else
@@ -2081,6 +2081,13 @@ function AchievementStatButton_OnClick(self)
 		AchievementFrameStats_Update();
 	elseif ( self.summary ) then
 		AchievementFrame_SelectSummaryStatistic(self.id);
+	end
+end
+
+function AchievementStatButton_OnEnter(self)
+	if ( self.text:IsTruncated() ) then
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+		GameTooltip:SetText(self.text:GetText(), 1, 1, 1, 1, 1);
 	end
 end
 

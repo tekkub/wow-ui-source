@@ -10,13 +10,38 @@ abilityInfo should be defined with the following functions:
 	:GetMaxHealth(target)- returns the max health of the associated unit. If not in a battle, returns 0 for all tokens but self.
 	:GetAttackStat(target)	- returns the value of the attack stat of the pet
 	:GetSpeedStat(target)	- returns the value of the speed stat of the pet
-	:GetState(stateID, target) - returns the value of a stat associated with a unit. If not associated with a battle, return 0.
+	:GetState(stateID, target) - returns the value of a state associated with a unit. If not associated with a battle, return 0.
+	:GetWeatherState(stateID) - returns the value of the state associated with the weather. If not associated with a battle, return 0.
+	:GetPadState(stateID, target) - returns the value of the state associated with the pad on target's side. If not associated with a battle, return 0.
+	:GetPetOwner(target)	- returns either LE_BATTLE_PET_ALLY, LE_BATTLE_PET_ENEMY, or LE_BATTLE_PET_WEATHER while in combat.
+	:HasAura(auraID, target) - returns true if the unit has the aura active, false if they don't or we aren't in combat.
+	:GetPetType(target) - returns the pet type ID of the target. May return nil if the target doesn't exist (e.g. when clicking on the link in chat.)
 
 	Values for target are:
-	For abilities: self(default), enemy
-	For auras: aurawearer(default), auracaster
+	For abilities: self(default), enemy(affected)
+	For auras: auracaster(default), aurawearer(affected)
 }
 --]]
+DEFAULT_PET_BATTLE_ABILITY_INFO = {};
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetAbilityID() error("UI: Unimplemented Function") end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetCooldown() return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetRemainingDuration() return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:IsInBattle() error("UI: Unimplemented Function") end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetHealth(target) return 100 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetMaxHealth(target) return 100 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetAttackStat(target) return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetSpeedStat(target) return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetState(stateID, target) return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetWeatherState(stateID) return 0 end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetPetOwner(taget) return LE_BATTLE_PET_ALLY end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:HasAura(auraID, target) return false end
+function DEFAULT_PET_BATTLE_ABILITY_INFO:GetPetType(target) if ( self:IsInBattle() ) then error("UI: Unimplemented Function"); else return nil end end
+
+function SharedPetBattleAbilityTooltip_GetInfoTable()
+	local info = {};
+	setmetatable(info, { __index = DEFAULT_PET_BATTLE_ABILITY_INFO; });
+	return info;
+end
 
 function SharedPetBattleAbilityTooltip_OnLoad(self)
 	self:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b);
@@ -38,10 +63,19 @@ function SharedPetBattleAbilityTooltip_SetAbility(self, abilityInfo, additionalT
 
 	--Update name
 	self.Name:SetText(name);
-
+	
+	if ( numTurns and numTurns > 1 ) then
+		self.Duration:SetFormattedText(BATTLE_PET_ABILITY_MULTIROUND, numTurns);
+		self.Duration:Show();
+		bottom = self.Duration;
+	else
+		self.Duration:Hide();
+	end
+	
 	--Update cooldown
 	if ( maxCooldown > 0 ) then
 		self.MaxCooldown:SetFormattedText(PET_BATTLE_TURN_COOLDOWN, maxCooldown);
+		self.MaxCooldown:SetPoint("TOPLEFT", bottom, "BOTTOMLEFT", 0, -5);
 		self.MaxCooldown:Show();
 		bottom = self.MaxCooldown;
 	else
@@ -97,7 +131,7 @@ function SharedPetBattleAbilityTooltip_SetAbility(self, abilityInfo, additionalT
 		self.Delimiter2:Show();
 
 		local nextStrongIndex, nextWeakIndex = 1, 1;
-		for i=1, C_PetBattles.GetNumPetTypes() do
+		for i=1, C_PetJournal.GetNumPetTypes() do
 			local modifier = C_PetBattles.GetAttackModifier(petType, i);
 			if ( modifier > 1 ) then
 				local icon = self.strongAgainstTextures[nextStrongIndex];
@@ -188,12 +222,23 @@ do
 		ENEMY = "enemy",
 		AURAWEARER = "aurawearer",
 		AURACASTER = "auracaster",
+		AFFECTED = "affected",
 
+		--Proc types (for use in getProcIndex)
 		PROC_ON_APPLY = PET_BATTLE_EVENT_ON_APPLY,
 		PROC_ON_DAMAGE_TAKEN = PET_BATTLE_EVENT_ON_DAMAGE_TAKEN,
 		PROC_ON_DAMAGE_DEALT = PET_BATTLE_EVENT_ON_DAMAGE_DEALT,
 		PROC_ON_HEAL_TAKEN = PET_BATTLE_EVENT_ON_HEAL_TAKEN,
 		PROC_ON_HEAL_DEALT = PET_BATTLE_EVENT_ON_HEAL_DEALT,
+		PROC_ON_AURA_REMOVED = PET_BATTLE_EVENT_ON_AURA_REMOVED,
+		PROC_ON_ROUND_START = PET_BATTLE_EVENT_ON_ROUND_START,
+		PROC_ON_ROUND_END = PET_BATTLE_EVENT_ON_ROUND_END,
+		PROC_ON_TURN = PET_BATTLE_EVENT_ON_TURN,
+		PROC_ON_ABILITY = PET_BATTLE_EVENT_ON_ABILITY,
+		PROC_ON_SWAP_IN = PET_BATTLE_EVENT_ON_SWAP_IN,
+		PROC_ON_SWAP_OUT = PET_BATTLE_EVENT_ON_SWAP_OUT,
+
+		--We automatically populate with state constants as well in the form STATE_%s
 
 		--Utility functions
 		ceil = math.ceil,
@@ -204,58 +249,54 @@ do
 		cond = function(conditional, onTrue, onFalse) if ( conditional ) then return onTrue; else return onFalse; end end,
 		clamp = function(value, minClamp, maxClamp) return min(max(value, minClamp), maxClamp); end,
 
-
 		--Data fetching functions
-		points = function(turnIndex, effectIndex, abilityID)
-					if ( not abilityID ) then
-						abilityID = parsedAbilityInfo:GetAbilityID();
-					end
-					local points, accuracy, duration = C_PetBattles.GetAbilityEffectInfo(abilityID, turnIndex, effectIndex);
-					return points;
-				end,
-		accuracy = function(turnIndex, effectIndex, abilityID)
-					if ( not abilityID ) then
-						abilityID = parsedAbilityInfo:GetAbilityID();
-					end
-					local points, accuracy, duration = C_PetBattles.GetAbilityEffectInfo(abilityID, turnIndex, effectIndex);
-					return accuracy;
-				end,
-		duration = function(turnIndex, effectIndex, abilityID)
-					if ( not abilityID ) then
-						abilityID = parsedAbilityInfo:GetAbilityID();
-					end
-					local points, accuracy, duration = C_PetBattles.GetAbilityEffectInfo(abilityID, turnIndex, effectIndex);
-					return duration;
-				end,
-		state = function(stateID, target)
+		unitState = function(stateID, target)
 					if ( not target ) then
 						target = "default";
 					end
 					return parsedAbilityInfo:GetState(stateID, target);
 				end,
-		power = function(target)
+		unitPower = function(target)
 					if ( not target ) then
 						target = "default";
 					end
 					return parsedAbilityInfo:GetAttackStat(target);
 				end,
-		speed = function(target)
+		unitSpeed = function(target)
 					if ( not target ) then
 						target = "default";
 					end
 					return parsedAbilityInfo:GetSpeedStat(target);
 				end,
-		maxHealth = function(target)
+		unitMaxHealth = function(target)
 					if ( not target ) then
 						target = "default";
 					end
 					return parsedAbilityInfo:GetMaxHealth(target);
 				end,
-		health = function(target)
+		unitHealth = function(target)
 					if ( not target ) then
 						target = "default";
 					end
 					return parsedAbilityInfo:GetHealth(target);
+				end,
+		unitIsAlly = function(target)
+					if ( not target ) then
+						target = "default";
+					end
+					return parsedAbilityInfo:GetPetOwner(target) == LE_BATTLE_PET_ALLY;
+				end,
+		unitHasAura = function(auraID, target)
+					if ( not target ) then
+						target = "default";
+					end
+					return parsedAbilityInfo:HasAura(auraID, target);
+				end,
+		unitPetType = function(target)
+					if ( not target ) then
+						target = "default";
+					end
+					return parsedAbilityInfo:GetPetType(target);
 				end,
 		isInBattle = function()
 					return parsedAbilityInfo:IsInBattle();
@@ -300,16 +341,148 @@ do
 					end
 					return turnIndex;
 				end,
+		abilityName = function(abilityID)
+					if ( not abilityID ) then
+						abilityID = parsedAbilityInfo:GetAbilityID();
+					end
+					local id, name, icon, maxCooldown, description, numTurns, petType = C_PetBattles.GetAbilityInfoByID(abilityID);
+					return name;
+				end,
+		abilityHasHints = function(abilityID)
+					if ( not abilityID ) then
+						abilityID = parsedAbilityInfo:GetAbilityID();
+					end
+					local id, name, icon, maxCooldown, unparsedDescription, numTurns, petType, noStrongWeakHints = C_PetBattles.GetAbilityInfoByID(abilityID);
+					return petType and not noStrongWeakHints;
+				end,
+		padState = function(stateID, target)
+					if ( not target ) then
+						target = "default";
+					end
+					return parsedAbilityInfo:GetPadState(stateID, target);
+				end,
+		weatherState = function(stateID)
+					return parsedAbilityInfo:GetWeatherState(stateID);
+				end,
+		abilityStateMod = function(stateID, abilityID)
+					if ( not abilityID ) then
+						abilityID = parsedAbilityInfo:GetAbilityID();
+					end
+					return C_PetBattles.GetAbilityStateModification(abilityID, stateID);
+				end,
 	};
 	
+	-- Dynamic fetching functions
+	local effectParamStrings = {C_PetBattles.GetAllEffectNames()};
+	for i = 1, #effectParamStrings do
+		parserEnv[effectParamStrings[i]] = 
+			function(turnIndex, effectIndex, abilityID)
+				if ( not abilityID ) then
+					abilityID = parsedAbilityInfo:GetAbilityID();
+				end
+				local value = C_PetBattles.GetAbilityEffectInfo(abilityID, turnIndex, effectIndex, effectParamStrings[i]);
+				if ( not value ) then
+					error("No such attribute: "..effectParamStrings[i]);
+				end
+				return value;
+			end;
+	end
+
+	-- Fill out the environment with all states (format: STATE_%s)
+	C_PetBattles.GetAllStates(parserEnv);
+		
+	
+	--Alias helpers
+	local function FormatDamageHelper(baseDamage, attackType, defenderType)
+		local output = "";
+		local multi = C_PetBattles.GetAttackModifier(attackType, defenderType);
+
+		if ( multi > 1 ) then 
+			output = GREEN_FONT_COLOR_CODE..math.floor(baseDamage * multi)..FONT_COLOR_CODE_CLOSE;
+			if (ENABLE_COLORBLIND_MODE == 1) then
+				output = output.."|Tinterface\\petbattles\\battlebar-abilitybadge-strong-small:0|t";
+			end
+			return output;
+		elseif ( multi < 1 ) then 
+			output = RED_FONT_COLOR_CODE..math.floor(baseDamage * multi)..FONT_COLOR_CODE_CLOSE;
+			if (ENABLE_COLORBLIND_MODE == 1) then
+				output = output.."|Tinterface\\petbattles\\battlebar-abilitybadge-weak-small:0|t";
+			end
+			return output;
+		end
+		
+		return math.floor(baseDamage);
+	end
+
+	local function FormatHealingHelper(baseHeal, healingDone, healingTaken)
+		local output = "";
+
+		local doneMulti = (healingDone / 100)
+		local takenMulti = (healingTaken / 100);
+		
+		local finalHeal = baseHeal + baseHeal * doneMulti;
+		finalHeal = finalHeal + finalHeal * takenMulti;
+
+		local finalMulti = finalHeal / baseHeal;
+
+		if ( finalMulti > 1 ) then 
+			output = GREEN_FONT_COLOR_CODE..math.floor(baseHeal * finalMulti)..FONT_COLOR_CODE_CLOSE;
+			if (ENABLE_COLORBLIND_MODE == 1) then
+				output = output.."|Tinterface\petbattles\battlebar-abilitybadge-strong-small:0|t";
+			end
+			return output;
+		elseif( finalMulti < 1 ) then 
+			output = RED_FONT_COLOR_CODE..math.floor(baseHeal * finalMulti)..FONT_COLOR_CODE_CLOSE;
+			if (ENABLE_COLORBLIND_MODE == 1) then
+				output = output.."|Tinterface\petbattles\battlebar-abilitybadge-weak-small:0|t";
+			end
+			return output;
+		end
+
+		return math.floor(baseHeal);
+	end
+
 	--Aliases
-	parserEnv.AttackBonus = function() return (1 + 0.05 * parserEnv.power()); end;
-	parserEnv.HealingBonus = function() return (1 + 0.05 * parserEnv.power()); end;
-	parserEnv.StandardDamage = function(...) return parserEnv.floor(parserEnv.points(...) * parserEnv.AttackBonus()); end;
-	parserEnv.StandardHealing = function(...) return parserEnv.floor(parserEnv.points(...) * parserEnv.HealingBonus()); end;
 	parserEnv.OnlyInBattle = function(text) if ( parserEnv.isInBattle() ) then return text else return ""; end end;
 	parserEnv.School = function(abilityID) return parserEnv.petTypeName(parserEnv.abilityPetType(abilityID)); end;
+	parserEnv.SumStates = function(stateID, target)
+		if ( parserEnv.unitPetType(target) == 7 ) then --Elementals aren't affected by weathers.
+			return parserEnv.unitState(stateID, target) + parserEnv.padState(stateID, target);
+		else
+			return parserEnv.unitState(stateID, target) + parserEnv.padState(stateID, target) + parserEnv.weatherState(stateID);
+		end
+	end;
 
+
+	--Attack aliases
+	parserEnv.AttackBonus = function() return (1 + 0.05 * parserEnv.unitPower()); end;
+	parserEnv.SimpleDamage = function(...) return parserEnv.points(...) * parserEnv.AttackBonus(); end;
+	parserEnv.StandardDamage = function(...)
+		local turnIndex, effectIndex, abilityID = ...;
+		return parserEnv.FormatDamage(parserEnv.SimpleDamage(...), abilityID);
+	end;
+	parserEnv.FormatDamage = function(baseDamage, abilityID)
+		if ( parserEnv.isInBattle() and parserEnv.abilityHasHints(abilityID) ) then
+			return FormatDamageHelper(baseDamage, parserEnv.abilityPetType(abilityID), parserEnv.unitPetType(parserEnv.AFFECTED));
+		else
+			return parserEnv.floor(baseDamage);
+		end
+	end;
+	
+	--Healing aliases
+	parserEnv.HealingBonus = function() return (1 + 0.05 * parserEnv.unitPower()); end;
+	parserEnv.SimpleHealing = function(...) return parserEnv.points(...) * parserEnv.HealingBonus(); end;
+	parserEnv.StandardHealing = function(...)
+		return parserEnv.FormatHealing(parserEnv.SimpleHealing(...));
+	end;
+	parserEnv.FormatHealing = function(baseHealing)
+		if ( parserEnv.isInBattle() ) then
+			return FormatHealingHelper(baseHealing, parserEnv.SumStates(65), parserEnv.SumStates(66));
+		else
+			return parserEnv.floor(baseHealing);
+		end
+	end;
+	
 	--Don't allow designers to accidentally change the environment
 	local safeEnv = {};
 	setmetatable(safeEnv, { __index = parserEnv, __newindex = function() end });
@@ -324,7 +497,7 @@ do
 			--Don't let designer errors cause us to stop execution
 			local success, repl = pcall(expr);
 			if ( success ) then
-				return repl;
+				return repl or "";
 			elseif ( IsGMClient() ) then
 				local err = string.match(repl, ":%d+: (.*)");
 				return "[DATA ERROR: "..err.."]";

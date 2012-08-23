@@ -201,8 +201,8 @@ SPEC_SPELLS_DISPLAY[72] = { 23881,10, 23588,10, 100130,10, 85288,10 }; --Fury
 SPEC_SPELLS_DISPLAY[73] = { 23922,10, 20243,10, 6572,10, 2565,10 }; --Protection
 
 SPEC_SPELLS_DISPLAY[102] = { 5176,10, 2912,10, 78674,10, 8921,10, 79577,10 }; --Balance
-SPEC_SPELLS_DISPLAY[103] = { 33876,10, 1822,10, 1079,10, 5221,10, 52610,10 }; --Feral
-SPEC_SPELLS_DISPLAY[104] = { 33878,10, 33745,10, 62606,10, 22842,10 }; --Guardian
+SPEC_SPELLS_DISPLAY[103] = { 33917,10, 1822,10, 1079,10, 5221,10, 52610,10 }; --Feral
+SPEC_SPELLS_DISPLAY[104] = { 33917,10, 33745,10, 62606,10, 22842,10 }; --Guardian
 SPEC_SPELLS_DISPLAY[105] = { 774,10, 33763,10, 18562,10, 5185,10 }; --Restoration
 
 SPEC_SPELLS_DISPLAY[250] = { 49998,10, 55050,10, 56815,10, 55233,10, 48982,10, 49028,10 }; --Blood
@@ -362,7 +362,7 @@ function PlayerTalentFrame_OnLoad(self)
 	self:RegisterEvent("PET_SPECIALIZATION_CHANGED");
 	self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED");
 	self:RegisterEvent("PREVIEW_TALENT_PRIMARY_TREE_CHANGED");
-	self:RegisterEvent("BAG_UPDATE");
+	self:RegisterEvent("BAG_UPDATE_DELAYED");
 	self.inspect = false;
 	self.talentGroup = 1;
 	self.hasBeenShown = false;
@@ -506,7 +506,7 @@ function PlayerTalentFrame_OnEvent(self, event, ...)
 			end
 		elseif (event == "LEARNED_SPELL_IN_TAB") then
 			-- Must update the Mastery bonus if you just learned Mastery
-		elseif (event == "BAG_UPDATE") then
+		elseif (event == "BAG_UPDATE_DELAYED") then
 			PlayerTalentFrame_RefreshClearInfo();
 		end
 	end
@@ -1500,7 +1500,7 @@ function PlayerTalentFrame_UpdateSpecFrame(self, spec)
 	end
 
 	-- hide unused spell buttons
-	frame = scrollChild["abilityButton"..index];
+	local frame = scrollChild["abilityButton"..index];
 	while frame do
 		frame:Hide();
 		frame.spellID = nil;

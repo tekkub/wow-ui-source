@@ -8,6 +8,8 @@ function TotemFrame_OnLoad(self)
 	local _, class = UnitClass("player");
 	if ( class == "DEATHKNIGHT" ) then
 		self:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 65, -55);
+	elseif ( class == "WARLOCK" ) then
+		TotemFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 28, -75);
 	end
 end
 
@@ -25,8 +27,6 @@ function TotemFrame_Update()
 		else
 			TotemFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 67, -63);
 		end
-	elseif ( class == "WARLOCK" ) then
-		TotemFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 28, -75);
 	elseif ( class == "DRUID" ) then
 		local form  = GetShapeshiftFormID();
 		if ( form == MOONKIN_FORM or not form ) then
@@ -44,7 +44,7 @@ function TotemFrame_Update()
 		TotemFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 28, -75);
 	elseif ( class == "MAGE" ) then
 		TotemFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 50, -75);
-	elseif ( hasPet  and class ~= "SHAMAN" ) then
+	elseif ( hasPet  and class ~= "SHAMAN" and class ~= "WARLOCK" ) then
 		TotemFrame:Hide();
 		return;
 	end
@@ -78,35 +78,39 @@ function TotemFrame_Update()
 	else
 		TotemFrame:Hide();
 	end
+	TotemFrame_AdjustPetFrame();
 	PlayerFrame_AdjustAttachments();
 end
 
 function TotemFrame_OnEvent(self, event, ...)
 	if ( event == "PLAYER_TOTEM_UPDATE" ) then
 		local slot = ...;
-		local haveTotem, name, startTime, duration, icon = GetTotemInfo(slot);
-		local button;
-		for i=1, MAX_TOTEMS do
-			button = _G["TotemFrameTotem"..i];
-			if ( button.slot == slot ) then
-				local previouslyShown = button:IsShown();
-				TotemButton_Update(button, startTime, duration, icon);
-				-- if we have no active totems then we need to hide the whole frame, otherwise show it
-				if ( previouslyShown ) then
-					if ( not button:IsShown() ) then
-						self.activeTotems = self.activeTotems - 1;
+		if ( slot <= MAX_TOTEMS ) then
+			local haveTotem, name, startTime, duration, icon = GetTotemInfo(slot);
+			local button;
+			for i=1, MAX_TOTEMS do
+				button = _G["TotemFrameTotem"..i];
+				if ( button.slot == slot ) then
+					local previouslyShown = button:IsShown();
+					TotemButton_Update(button, startTime, duration, icon);
+					-- if we have no active totems then we need to hide the whole frame, otherwise show it
+					if ( previouslyShown ) then
+						if ( not button:IsShown() ) then
+							self.activeTotems = self.activeTotems - 1;
+						end
+					else
+						if ( button:IsShown() ) then
+							self.activeTotems = self.activeTotems + 1;
+						end
 					end
-				else
-					if ( button:IsShown() ) then
-						self.activeTotems = self.activeTotems + 1;
+					if ( self.activeTotems > 0 ) then
+						self:Show();
+					else
+						self:Hide();
 					end
+					TotemFrame_AdjustPetFrame();
+					return;
 				end
-				if ( self.activeTotems > 0 ) then
-					self:Show();
-				else
-					self:Hide();
-				end
-				return;
 			end
 		end
 	end
@@ -149,5 +153,16 @@ function TotemButton_Update(button, startTime, duration, icon)
 		buttonCooldown:Hide();
 		button:SetScript("OnUpdate", nil);
 		button:Hide();
+	end
+end
+
+function TotemFrame_AdjustPetFrame()
+	local _, class = UnitClass("player");
+	if ( class == "WARLOCK" ) then
+		if ( PetFrame and PetFrame:IsShown() and TotemFrameTotem2:IsShown() ) then
+			PetFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 93, -90);
+		else
+			PetFrame:SetPoint("TOPLEFT", PlayerFrame, "TOPLEFT", 60, -90);
+		end
 	end
 end

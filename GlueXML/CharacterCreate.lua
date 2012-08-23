@@ -185,7 +185,7 @@ function CharacterCreate_OnShow()
 	SetCharacterRace(GetSelectedRace());
 	
 	CharacterCreateEnumerateClasses(GetAvailableClasses());
-	local_,_,index = GetSelectedClass();
+	local _,_,index = GetSelectedClass();
 	SetCharacterClass(index);
 
 	SetCharacterGender(GetSelectedSex())
@@ -433,7 +433,7 @@ function SetCharacterRace(id)
 	-- hard-coded for Pandaren because of alliance/horde pseudo buttons
 	local canProceed = true;
 	if ( id == PANDAREN_RACE_ID and PAID_SERVICE_TYPE ) then
-		local currentFaction = PaidChange_GetCurrentFaction();
+		local _, currentFaction = PaidChange_GetCurrentFaction();
 		if ( PaidChange_GetCurrentRaceIndex() == PANDAREN_RACE_ID and PAID_SERVICE_TYPE == PAID_FACTION_CHANGE ) then
 			-- this is an original pandaren staying or becoming selected
 			-- check the pseudo-buttons
@@ -488,7 +488,7 @@ function SetCharacterRace(id)
 	local raceText = _G["RACE_INFO_"..fileString];
 	local abilityIndex = 1;
 	local tempText = _G["ABILITY_INFO_"..fileString..abilityIndex];
-	abilityText = "";
+	local abilityText = "";
 	while ( tempText ) do
 		abilityText = abilityText..tempText.."\n\n";
 		abilityIndex = abilityIndex + 1;
@@ -541,7 +541,7 @@ function SetCharacterClass(id)
 	local className, classFileName, _, tank, healer, damage = GetSelectedClass();
 	local abilityIndex = 0;
 	local tempText = _G["CLASS_INFO_"..classFileName..abilityIndex];
-	abilityText = "";
+	local abilityText = "";
 	while ( tempText ) do
 		abilityText = abilityText..tempText.."\n\n";
 		abilityIndex = abilityIndex + 1;
@@ -990,13 +990,13 @@ function CharCreate_PrepPreviewModels(reloadModels)
 	if ( class == "DEATHKNIGHT" or displayFrame.lastClass == "DEATHKNIGHT" ) and ( class ~= displayFrame.lastClass ) then 
 		classSwap = true;
 	end
+	displayFrame.lastClass = class;
 
 	-- always clear the featureType
 	for index, previewFrame in pairs(displayFrame.previews) do
 		previewFrame.featureType = 0;
 		-- force model reload if class changed
-		if ( classSwap ) then
-			displayFrame.lastClass = class;
+		if ( reloadModels or classSwap ) then
 			previewFrame.race = nil;
 			previewFrame.gender = nil;
 		end

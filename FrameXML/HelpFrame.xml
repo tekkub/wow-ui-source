@@ -1248,6 +1248,7 @@
 							<OnEditFocusGained>
 								self:HighlightText();
 								if ( self:GetText() == SEARCH ) then
+									self:SetText("")
 									self:SetFontObject("ChatFontSmall");
 									self.icon:SetVertexColor(1.0, 1.0, 1.0);
 									self.inactive = false;
@@ -1689,6 +1690,7 @@
 				self:RegisterEvent("UPDATE_TICKET");
 			</OnLoad>
 			<OnClick>
+				HelpOpenTicketButtonTutorial:Hide();
 				if ( TicketStatusFrame.hasGMSurvey ) then
 					GMSurveyFrame_LoadUI();
 					ShowUIPanel(GMSurveyFrame);

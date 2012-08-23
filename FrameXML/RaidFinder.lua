@@ -1,5 +1,11 @@
 MAX_RAID_FINDER_COOLDOWN_NAMES = 8;
 
+local function isRaidFinderDungeonDisplayable(id)
+	local name, typeID, subtypeID, minLevel, maxLevel, _, _, _, expansionLevel = GetLFGDungeonInfo(id);
+	local myLevel = UnitLevel("player");
+	return myLevel >= minLevel and myLevel <= maxLevel and EXPANSION_LEVEL >= expansionLevel;
+end
+
 function RaidFinderFrame_OnLoad(self)
 	self:RegisterEvent("LFG_LOCK_INFO_RECEIVED");
 end
@@ -223,12 +229,6 @@ function RaidFinderQueueFrame_Join()
 	end
 end
 
-function isRaidFinderDungeonDisplayable(id)
-	local name, typeID, subtypeID, minLevel, maxLevel, _, _, _, expansionLevel = GetLFGDungeonInfo(id);
-	local myLevel = UnitLevel("player");
-	return myLevel >= minLevel and myLevel <= maxLevel and EXPANSION_LEVEL >= expansionLevel;
-end
-
 function RaidFinderFrameRoleCheckButton_OnClick(self)
 	RaidFinderQueueFrame_SetRoles();
 end
@@ -249,7 +249,7 @@ function RaidFinderFrameFindRaidButton_Update()
 	if ( mode == "queued" or mode == "rolecheck" or mode == "proposal" or mode == "suspended" ) then
 		RaidFinderFrameFindRaidButton:SetText(LEAVE_QUEUE);
 	else
-		if ( IsInGroup() ) then
+		if ( IsInGroup() and GetNumGroupMembers() > 1 ) then
 			RaidFinderFrameFindRaidButton:SetText(JOIN_AS_PARTY);
 		else
 			RaidFinderFrameFindRaidButton:SetText(FIND_A_GROUP);

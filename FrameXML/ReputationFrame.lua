@@ -173,9 +173,8 @@ function ReputationFrame_Update()
 
 			if (friendID ~= nil) then
 				factionStandingtext = friendTextLevel;
-				barMax = friendMaxRep - friendThresh;
-				barMax = 8400;
-				barValue = barValue - friendThresh;
+				barValue = friendRep - friendThresh;
+				barMax = min( friendMaxRep - friendThresh, 8400);
 				barMin = 0;
 			end
 
@@ -430,7 +429,7 @@ function ReputationWatchBar_Update(newLevel)
 	
 	if ( visibilityChanged ) then
 		UIParent_ManageFramePositions();
-		updateContainerFrameAnchors();
+		UpdateContainerFrameAnchors();
 	end
 end
 

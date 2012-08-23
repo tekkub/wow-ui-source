@@ -677,6 +677,7 @@ function CharacterSelect_ManageAccount()
 end
 
 function RealmSplit_GetFormatedChoice(formatText)
+	local realmChoice;
 	if ( SERVER_SPLIT_CLIENT_STATE == 1 ) then
 		realmChoice = SERVER_SPLIT_SERVER_ONE;
 	else
@@ -721,7 +722,7 @@ function CharacterSelectScrollDown_OnClick()
 	local numChars = GetNumCharacters();
 	if ( numChars > 1 ) then
 		if ( CharacterSelect.selectedIndex < GetNumCharacters() ) then
-			newIndex = CharacterSelect.selectedIndex + 1;
+			local newIndex = CharacterSelect.selectedIndex + 1;
 			if (newIndex > MAX_CHARACTERS_DISPLAYED) then
 				CHARACTER_LIST_OFFSET = newIndex - MAX_CHARACTERS_DISPLAYED;
 			end
@@ -739,7 +740,7 @@ function CharacterSelectScrollUp_OnClick()
 	local numChars = GetNumCharacters();
 	if ( numChars > 1 ) then
 		if ( CharacterSelect.selectedIndex > 1 ) then
-			newIndex = CharacterSelect.selectedIndex - 1;
+			local newIndex = CharacterSelect.selectedIndex - 1;
 			if (newIndex >= MAX_CHARACTERS_DISPLAYED) then
 				CHARACTER_LIST_OFFSET = max(newIndex - MAX_CHARACTERS_DISPLAYED, 0);
 			end
@@ -853,18 +854,18 @@ end
 
 
 ACCOUNT_UPGRADE_FEATURES = {
-	TRIAL = { [1] = { icon = "Interface\\Icons\\achievement_level_70", text = UPGRADE_FEATURE_1 },
-		  [2] = { icon = "Interface\\Icons\\Achievement_Quests_Completed_06", text = UPGRADE_FEATURE_2 },
-		  [3] = { icon = "Interface\\Icons\\achievement_zone_hellfirepeninsula_01", text = UPGRADE_FEATURE_3 },
-		  logo = "Interface\\Glues\\Common\\Glues-WoW-ClassicLogo",
-		  banner = { 0.0, 0.777, 0.0, 0.136 }},
+	TRIAL =	{ [1] = { icon = "Interface\\Icons\\achievement_level_80", text = UPGRADE_FEATURE_4 },
+		  [2] = { icon = "Interface\\Icons\\achievement_boss_lichking", text = UPGRADE_FEATURE_5 },
+		  [3] = { icon = "Interface\\Icons\\achievement_zone_icecrown_01", text = UPGRADE_FEATURE_6 },
+		  logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo",
+		  banner = { 0.0, 0.777, 0.411, 0.546 }},
 	[1] =	{ [1] = { icon = "Interface\\Icons\\achievement_level_80", text = UPGRADE_FEATURE_4 },
 		  [2] = { icon = "Interface\\Icons\\achievement_boss_lichking", text = UPGRADE_FEATURE_5 },
 		  [3] = { icon = "Interface\\Icons\\achievement_zone_icecrown_01", text = UPGRADE_FEATURE_6 },
 		  logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo",
 		  banner = { 0.0, 0.777, 0.411, 0.546 }},
 	[2] =	{ [1] = { icon = "Interface\\Icons\\achievement_level_85", text = UPGRADE_FEATURE_7 },
-		  [2] = { icon = "Interface\\Glues\\AccountUpgrade\\icon-gob-worg", text = UPGRADE_FEATURE_8 },
+		  [2] = { icon = "Interface\\Icons\\achievement_firelands raid_ragnaros", text = UPGRADE_FEATURE_8 },
 		  [3] = { icon = "Interface\\Icons\\Ability_Mount_CelestialHorse", text = UPGRADE_FEATURE_9 },
 		  logo = "Interface\\Glues\\Common\\Glues-WoW-CCLogo",
 		  banner = { 0.0, 0.777, 0.138, 0.272 }},
@@ -881,7 +882,10 @@ function AccountUpgradePanel_Update(isExpanded)
 	if ( IsTrialAccount() ) then
 		tag = "TRIAL";
 	else
-		tag = GetAccountExpansionLevel();
+		tag = max(GetAccountExpansionLevel(), GetExpansionLevel());
+		if ( IsExpansionTrial() ) then
+			tag = tag - 1;
+		end
 	end
 
 	if ( EXPANSION_LOGOS[tag] ) then

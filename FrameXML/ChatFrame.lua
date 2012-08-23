@@ -26,6 +26,7 @@ local chatFilters = {};
 -- if you change what these tables point to (ie slash command, emote, chat)
 -- then you need to invalidate the entry in the hash table
 local hash_SecureCmdList = {}
+--Note: These need to remain global for AddOns
 hash_SlashCmdList = {}				--[localizedCommand] -> function
 hash_EmoteTokenList = {}
 hash_ChatTypeInfoList = {}			--[localizedCommand] -> identifier (Stores all slash commands)
@@ -3849,7 +3850,10 @@ function ChatEdit_InsertLink(text)
 	end
 	if ( BrowseName and BrowseName:IsVisible() ) then
 		local item;
-		if ( strfind(text, "item:", 1, true) ) then
+		if ( strfind(text, "battlepet:") ) then
+			local petName = strmatch(text, "%[(.+)%]");
+			item = petName;
+		elseif ( strfind(text, "item:", 1, true) ) then
 			item = GetItemInfo(text);
 		end
 		if ( item ) then
@@ -4088,7 +4092,7 @@ function ChatEdit_OnEnterPressed(self)
 
 	local type = self:GetAttribute("chatType");
 	local chatFrame = self:GetParent();
-	if ( chatFrame.isTemporary ) then --Temporary window sticky types never change.
+	if ( chatFrame.isTemporary and chatFrame.chatType ~= "PET_BATTLE_COMBAT_LOG" ) then --Temporary window sticky types never change.
 		self:SetAttribute("stickyType", chatFrame.chatType);
 		--BN_WHISPER FIXME
 		if ( chatFrame.chatType == "WHISPER" or chatFrame.chatType == "BN_WHISPER" ) then
@@ -4130,7 +4134,7 @@ function ChatEdit_SecureTabPressed(self)
 	if ( chatType == "WHISPER" or chatType == "BN_WHISPER" ) then
 		local newTarget, newTargetType = ChatEdit_GetNextTellTarget(self:GetAttribute("tellTarget"), chatType);
 		if ( newTarget and newTarget ~= "" ) then
-			self:SetAttribute("chatType", newTargetType);	--UpdateHeader will change it to BN_WHISPER if needed.
+			self:SetAttribute("chatType", newTargetType);
 			self:SetAttribute("tellTarget", newTarget);
 			ChatEdit_UpdateHeader(self);
 		end

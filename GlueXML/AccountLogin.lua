@@ -703,7 +703,7 @@ function AccountLogin_SetupAccountListDDL()
 end
 
 function CinematicsFrame_OnLoad(self)
-	CinematicsFrame.numMovies = 5;
+	CinematicsFrame.numMovies = GetClientDisplayExpansionLevel() + 1;
 	local button;
 	local height = 80;
 	for i = 1, CinematicsFrame.numMovies do
@@ -824,7 +824,7 @@ end
 
 function CinematicsFrame_OnShow(self)
 	for i = 1, CinematicsFrame.numMovies do
-		button = _G["CinematicsButton"..i];
+		local button = _G["CinematicsButton"..i];
 		if ( not button ) then
 			break;
 		end

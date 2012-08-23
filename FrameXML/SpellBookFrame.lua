@@ -146,9 +146,9 @@ function SpellBookFrame_OnEvent(self, event, ...)
 		end
 	elseif ( event == "LEARNED_SPELL_IN_TAB" ) then
 		SpellBookFrame_Update();
-		local spellID, tabNum = ...;
+		local spellID, tabNum, isGuildSpell = ...;
 		local flashFrame = _G["SpellBookSkillLineTab"..tabNum.."Flash"];
-		if ( SpellBookFrame.bookType == BOOKTYPE_PET ) then
+		if ( SpellBookFrame.bookType == BOOKTYPE_PET or isGuildSpell) then
 			return;
 		elseif ( tabNum <= GetNumSpellTabs() ) then
 			if ( flashFrame ) then
@@ -167,8 +167,11 @@ function SpellBookFrame_OnEvent(self, event, ...)
 			SpellBookFrame_UpdateSkillLineTabs();
 		end
 	elseif ( event == "PLAYER_SPECIALIZATION_CHANGED" ) then
-		SpellBookFrame.selectedSkillLine = 2; -- number of skilllines will change!
-		SpellBookFrame_Update();
+		local unit = ...;
+		if ( unit == "player" ) then
+			SpellBookFrame.selectedSkillLine = 2; -- number of skilllines will change!
+			SpellBookFrame_Update();
+		end
 	end
 end
 
@@ -830,7 +833,7 @@ function SpellBook_GetCurrentPage()
 end
 
 local maxShines = 1;
-shineGet = {}
+local shineGet = {}
 function SpellBook_GetAutoCastShine ()
 	local shine = shineGet[1];
 	
@@ -1127,8 +1130,8 @@ SPEC_CORE_ABILITY_DISPLAY[251] = {	45462,	49184,	49020,	49143,					}; --Frost
 SPEC_CORE_ABILITY_DISPLAY[252] = {	45462,	45477,	55090,	85948,	63560,	47541,	}; --Unholy
 
 SPEC_CORE_ABILITY_DISPLAY[102] = {	79577,	8921,	93402,	5176,	2912,	78674,	}; --Balance
-SPEC_CORE_ABILITY_DISPLAY[103] = {	5221,	33876,	1822,	52610,	1079,	22568,	}; --Feral
-SPEC_CORE_ABILITY_DISPLAY[104] = {	33745,	77758,	33878,	62606,	22842,			}; --Guardian
+SPEC_CORE_ABILITY_DISPLAY[103] = {	5221,	33917 ,	1822,	52610,	1079,	22568,	}; --Feral
+SPEC_CORE_ABILITY_DISPLAY[104] = {	33745,	77758,	33917,	62606,	22842,			}; --Guardian
 SPEC_CORE_ABILITY_DISPLAY[105] = {	774,	8936,	50464,	5185,	33763,	18562,	}; --Restoration
 
 SPEC_CORE_ABILITY_DISPLAY[253] = {	1978,	34026,	3044,	77767,	53351,			}; --Beast Mastery
@@ -1383,7 +1386,7 @@ CoreAbilitiesFrame_HelpPlate = {
 WhatHasChangedFrame_HelpPlate = {
 	FramePos = { x = 5,	y = -22 },
 	FrameSize = { width = 580, height = 500	},
-	[1] = { ButtonPos = { x = 430,	y = -30}, HighLightBox = { x = 65, y = -15, width = 460, height = 472 }, ToolTipDir = "BOTTOM",	ToolTipText = WHAT_HAS_CHANGED_HELP_1 },
+	[1] = { ButtonPos = { x = 430,	y = -30}, HighLightBox = { x = 65, y = -15, width = 460, height = 472 }, ToolTipDir = "DOWN",	ToolTipText = WHAT_HAS_CHANGED_HELP_1 },
 }
 
 function SpellBook_ToggleTutorial()

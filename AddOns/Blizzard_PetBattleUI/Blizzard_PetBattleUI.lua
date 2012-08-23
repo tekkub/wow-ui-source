@@ -100,6 +100,7 @@ function PetBattleFrame_OnEvent(self, event, ...)
 		PlaySoundKitID(32052); -- UI_PetBattle_Camera_Move_Out
 	elseif ( event == "PET_BATTLE_CLOSE" ) then
 		PetBattleFrame_Remove(self);
+		StaticPopup_Hide("PET_BATTLE_FORFEIT");
 	elseif ( event == "UPDATE_BINDINGS" ) then
 		PetBattleFrame_UpdateAbilityButtonHotKeys(self);
 	elseif ( event == "PET_BATTLE_XP_CHANGED" ) then
@@ -824,7 +825,7 @@ function PetBattleAbilityButton_UpdateIcons(self)
 			self.Icon:SetTexture("INTERFACE\\ICONS\\INV_Misc_Key_05");
 			self:Hide();
 		else
-			name, icon, typeEnum = C_PetJournal.GetPetAbilityInfo(self.abilityID);
+			name, icon = C_PetJournal.GetPetAbilityInfo(self.abilityID);
 			self.Icon:SetTexture(icon);
 			self.Lock:Show();
 			self.requiredLevel = abilityLevels[self:GetID()];
@@ -883,19 +884,20 @@ end
 
 function PetBattleUnitFrame_OnClick(self, button)
 	if ( button == "RightButton" ) then
-		PetBattleUnitFrame_ShowDropdown(self);
+		PetBattleUnitFrame_ShowDropdown(self, self.petIndex);
 	end
 end
 
-function PetBattleUnitFrame_ShowDropdown(self)
-	HideDropDownMenu(1);
-	PetBattleUnitFrameDropDown.initialize = PetBattleUnitFrameDropDown_Initialize;
-	PetBattleUnitFrameDropDown.displayMode = "MENU";
-	local name, speciesName = C_PetBattles.GetName(LE_BATTLE_PET_ENEMY, lastSelectedPetIndex);
+function PetBattleUnitFrame_ShowDropdown(self, petIndex)
+	--Right now, this only has the report option, so we won't display the dropdown if that won't be available
+	local name, speciesName = C_PetBattles.GetName(LE_BATTLE_PET_ENEMY, petIndex);
 	if (C_PetBattles.IsPlayerNPC(LE_BATTLE_PET_ENEMY) or not name or name == speciesName) then
 		return;
 	end
+
+	HideDropDownMenu(1);
 	PetBattleUnitFrameDropDown.name = name;	
+	PetBattleUnitFrameDropDown.petIndex = petIndex;
 	ToggleDropDownMenu(1, nil, PetBattleUnitFrameDropDown, "cursor");
 end
 
@@ -985,7 +987,8 @@ function PetBattleUnitFrame_UpdateDisplay(self)
 			self.PetModel:SetAnimation(6, 0); --Display the dead animation
 			--self.PetModel:SetAnimation(0, 0);
 		else
-			self.PetModel:SetAnimation(0, 0);
+			self.PetModel:SetAnimation(742, 0); -- Display the PetBattleStand animation
+			--self.PetModel:SetAnimation(742, 0);
 		end
 	end
 
@@ -1103,15 +1106,32 @@ function PetBattleUnitTooltip_OnLoad(self)
 	self:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b);
 end
 
-function PetBattleUnitFrameDropDown_Initialize (self)
-	C_PetBattles.SetPendingReportTargetFromBattlePetOwner(LE_BATTLE_PET_ENEMY);
-	UnitPopup_ShowMenu(PetBattleUnitFrameDropDown, "BATTLEPET", nil, PetBattleUnitFrameDropDown.name);
+function PetBattleUnitFrameDropDown_ReportUnit(btn, name, petIndex)
+	C_PetBattles.SetPendingReportBattlePetTarget(petIndex);
+	StaticPopup_Show("CONFIRM_REPORT_BATTLEPET_NAME", name);
+end
+
+function PetBattleUnitFrameDropDown_Initialize(self)
+	local info = UIDropDownMenu_CreateInfo();
+	info.text = self.name;
+	info.isTitle = 1;
+	info.notCheckable = 1;
+	UIDropDownMenu_AddButton(info);
+
+	info = UIDropDownMenu_CreateInfo();
+	info.text = REPORT_PET_NAME;
+	info.isTitle = nil;
+	info.notCheckable = 1;
+	info.func = PetBattleUnitFrameDropDown_ReportUnit;
+	info.arg1 = self.name;
+	info.arg2 = self.petIndex;
+	UIDropDownMenu_AddButton(info);
 end
 
 function PetBattleUnitTooltip_UpdateForUnit(self, petOwner, petIndex)
 	PetBattleUnitFrame_SetUnit(self, petOwner, petIndex);
 
-	local height = 193;
+	local height = 198;
 	local attack = C_PetBattles.GetPower(petOwner, petIndex);
 	local speed = C_PetBattles.GetSpeed(petOwner, petIndex);
 	local opponentSpeed = 0;
@@ -1473,7 +1493,7 @@ function PetBattleAuraHolder_Update(self)
 				elseif ( (nextFrame - 1) % numPerRow == 0 ) then
 					frame:SetPoint("TOP"..growsFrom, self.frames[nextFrame - numPerRow], "BOTTOM"..growsFrom, 0, 0);
 				else
-					frame:SetPoint("TOP"..growsFrom, self.frames[nextFrame - 1], "TOP"..growsTo, 0, 0);
+					frame:SetPoint("TOP"..growsFrom, self.frames[nextFrame - 1], "TOP"..growsTo, growsTo == "LEFT" and -4 or 4, 0);
 				end
 			end
 

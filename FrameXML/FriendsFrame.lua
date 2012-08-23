@@ -47,6 +47,9 @@ FRIENDS_TOOLTIP_MAX_TOONS = 5;
 FRIENDS_TOOLTIP_MAX_WIDTH = 200;
 FRIENDS_TOOLTIP_MARGIN_WIDTH = 12;
 
+ADDFRIENDFRAME_WOWHEIGHT = 218;
+ADDFRIENDFRAME_BNETHEIGHT = 296;
+
 FRIEND_TABS_MAX_WIDTH = 0;		-- some locales may need to abbreviate tab headers to fit
 
 local INVITE_RESTRICTION_NO_TOONS = 0;
@@ -431,8 +434,7 @@ function FriendsList_Update()
 			local name, level, class, area;
 			name, level, class, area, isOnline = GetFriendInfo(selectedFriend);
 		elseif ( FriendsFrame.selectedFriendType == FRIENDS_BUTTON_TYPE_BNET ) then
-			local presenceID, givenName, surname, toonName, toonID, client;
-			presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline = BNGetFriendInfo(selectedFriend);
+			local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline = BNGetFriendInfo(selectedFriend);
 			if ( not presenceName ) then
 				isOnline = false;
 			end
@@ -1624,7 +1626,7 @@ end
 
 function FriendsFrameBattlenetFrame_SetBroadcast()
 	local newBroadcastText = FriendsFrameBattlenetFrame.BroadcastFrame.ScrollFrame.EditBox:GetText();
-	_, _, _, broadcastText = BNGetInfo();
+	local _, _, _, broadcastText = BNGetInfo();
 	if ( newBroadcastText ~= broadcastText ) then
 		BNSetCustomMessage(newBroadcastText);
 	end
@@ -1745,7 +1747,7 @@ function FriendsFrameTooltip_Show(self)
 				toonNameString = _G["FriendsTooltipToon"..toonIndex.."Name"];
 				toonInfoString = _G["FriendsTooltipToon"..toonIndex.."Info"];
 				if ( client == BNET_CLIENT_WOW ) then
-					if ( realmName == playerRealmName and PLAYER_FACTION_GROUP[faction] == playerFactionGroup ) then
+					if ( realmName == playerRealmName and faction == playerFactionGroup ) then
 						text = string.format(FRIENDS_TOOLTIP_WOW_TOON_TEMPLATE, toonName, level, race, class);
 					else
 						text = string.format(FRIENDS_TOOLTIP_WOW_TOON_TEMPLATE, toonName..CANNOT_COOPERATE_LABEL, level, race, class);
@@ -1886,8 +1888,8 @@ function AddFriendNameEditBox_OnTextChanged(self, userInput)
 end
 
 function AddFriendEntryFrame_Expand()
-	AddFriendEntryFrame:SetHeight(296);
-	AddFriendFrame:SetHeight(296);
+	AddFriendEntryFrame:SetHeight(ADDFRIENDFRAME_BNETHEIGHT);
+	AddFriendFrame:SetHeight(ADDFRIENDFRAME_BNETHEIGHT);
 	AddFriendNoteFrame:Show();
 	AddFriendEntryFrameAcceptButton:SetText(SEND_REQUEST);
 	AddFriendEntryFrameRightTitle:SetAlpha(0.35);
@@ -1899,8 +1901,8 @@ function AddFriendEntryFrame_Expand()
 end
 
 function AddFriendEntryFrame_Collapse(clearText)
-	AddFriendEntryFrame:SetHeight(218);
-	AddFriendFrame:SetHeight(218);
+	AddFriendEntryFrame:SetHeight(ADDFRIENDFRAME_WOWHEIGHT);
+	AddFriendFrame:SetHeight(ADDFRIENDFRAME_WOWHEIGHT);
 	AddFriendNoteFrame:Hide();
 	AddFriendEntryFrameAcceptButton:SetText(ADD_FRIEND);
 	AddFriendEntryFrameRightTitle:SetAlpha(1);
@@ -2171,11 +2173,11 @@ end
 function CanCooperateWithToon(presenceID, hasTravelPass)
 	local hasFocus, toonName, client, realmName, realmID, faction = BNGetToonInfo(presenceID);
 	if ( hasTravelPass ) then
-		if ( realmID > 0 and PLAYER_FACTION_GROUP[faction] == playerFactionGroup ) then
+		if ( realmID > 0 and faction == playerFactionGroup ) then
 			return true;
 		end
 	else
-		if ( realmName == playerRealmName and PLAYER_FACTION_GROUP[faction] == playerFactionGroup ) then
+		if ( realmName == playerRealmName and faction == playerFactionGroup ) then
 			return true;
 		end
 	end
@@ -2211,7 +2213,7 @@ function FriendsFrame_GetInviteRestriction(index, canInvite)
 	for i = 1, numToons do
 		local hasFocus, toonName, client, realmName, realmID, faction = BNGetFriendToonInfo(index, i);
 		if ( client == BNET_CLIENT_WOW ) then
-			if ( PLAYER_FACTION_GROUP[faction] ~= playerFactionGroup ) then
+			if ( faction ~= playerFactionGroup ) then
 				restriction = max(INVITE_RESTRICTION_FACTION, restriction);
 			elseif ( realmID == 0 ) then
 				restriction = max(INVITE_RESTRICTION_INFO, restriction);
@@ -2280,7 +2282,7 @@ function TravelPassDropDown_Initialize(self)
 		restriction = INVITE_RESTRICTION_NONE;
 		local hasFocus, toonName, client, realmName, realmID, faction, race, class, _, _, level, _, _, _, _, toonID = BNGetFriendToonInfo(self.index, i);
 		if ( client == BNET_CLIENT_WOW ) then
-			if ( PLAYER_FACTION_GROUP[faction] ~= playerFactionGroup ) then
+			if ( faction ~= playerFactionGroup ) then
 				restriction = INVITE_RESTRICTION_FACTIONINVITE_RESTRICTION_FACTION;
 			elseif ( realmID == 0 ) then
 				restriction = INVITE_RESTRICTION_INFO;

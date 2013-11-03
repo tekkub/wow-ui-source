@@ -59,6 +59,7 @@ function CharacterSelect_OnLoad(self)
 end
 
 function CharacterSelect_OnShow()
+	DebugLog("Select_OnShow");
 	CHARACTER_LIST_OFFSET = 0;
 	-- request account data times from the server (so we know if we should refresh keybindings, etc...)
 	ReadyForAccountDataTimes()
@@ -185,6 +186,8 @@ function CharacterSelect_OnShow()
 	
 	-- character templates
 	CharacterTemplatesFrame_Update();
+	
+	PlayersOnServer_Update();
 
 	PromotionFrame_AwaitingPromotion();
 end
@@ -272,7 +275,13 @@ end
 
 function CharacterSelect_OnKeyDown(self,key)
 	if ( key == "ESCAPE" ) then
-		CharacterSelect_Exit();
+		if ( TOSFrame:IsShown() or ConnectionHelpFrame:IsShown() ) then
+			return;
+		elseif ( IsLauncherLogin() ) then
+			GlueMenuFrame:SetShown(not GlueMenuFrame:IsShown());
+		else
+			CharacterSelect_Exit();
+		end
 	elseif ( key == "ENTER" ) then
 		CharacterSelect_EnterWorld();
 	elseif ( key == "PRINTSCREEN" ) then
@@ -367,9 +376,11 @@ function UpdateCharacterSelection(self)
 	local index = self.selectedIndex - CHARACTER_LIST_OFFSET;
 	if ( (index > 0) and (index <= MAX_CHARACTERS_DISPLAYED) ) then
 		button = _G["CharSelectCharacterButton"..index];
-		button.selection:Show();
-		if ( button:IsMouseOver() ) then
-			CharacterSelectButton_ShowMoveButtons(button);
+		if ( button ) then
+			button.selection:Show();
+			if ( button:IsMouseOver() ) then
+				CharacterSelectButton_ShowMoveButtons(button);
+			end
 		end
 	end
 end
@@ -384,13 +395,11 @@ function UpdateCharacterList(skipSelect)
 		CharacterSelect.selectedIndex = numChars;
 		CharacterSelect.selectLast = 0;
 	end
-
+	local debugText = numChars..": ";
 	for i=1, numChars, 1 do
 		local name, race, class, level, zone, sex, ghost, PCC, PRC, PFC, PRCDisabled = GetCharacterInfo(GetCharIDFromIndex(i+CHARACTER_LIST_OFFSET));
 		local button = _G["CharSelectCharacterButton"..index];
-		if ( not name ) then
-			button:SetText("ERROR - too many characters");
-		else
+		if ( name ) then
 			if ( not zone ) then
 				zone = "";
 			end
@@ -426,6 +435,7 @@ function UpdateCharacterList(skipSelect)
 			paidServiceButton.disabledTooltip = nil;
 		end
 		if ( serviceType ) then
+			debugText = debugText.." "..(GetCharIDFromIndex(i+CHARACTER_LIST_OFFSET));
 			paidServiceButton:Show();
 			paidServiceButton.serviceType = serviceType;
 			if ( disableService ) then
@@ -459,7 +469,7 @@ function UpdateCharacterList(skipSelect)
 			break;
 		end
 	end
-
+	DebugLog(debugText);
 	if ( numChars == 0 ) then
 		CharacterSelectDeleteButton:Disable();
 		CharSelectEnterWorldButton:Disable();
@@ -854,16 +864,16 @@ end
 
 
 ACCOUNT_UPGRADE_FEATURES = {
-	TRIAL =	{ [1] = { icon = "Interface\\Icons\\achievement_level_80", text = UPGRADE_FEATURE_4 },
-		  [2] = { icon = "Interface\\Icons\\achievement_boss_lichking", text = UPGRADE_FEATURE_5 },
-		  [3] = { icon = "Interface\\Icons\\achievement_zone_icecrown_01", text = UPGRADE_FEATURE_6 },
-		  logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo",
-		  banner = { 0.0, 0.777, 0.411, 0.546 }},
-	[1] =	{ [1] = { icon = "Interface\\Icons\\achievement_level_80", text = UPGRADE_FEATURE_4 },
-		  [2] = { icon = "Interface\\Icons\\achievement_boss_lichking", text = UPGRADE_FEATURE_5 },
-		  [3] = { icon = "Interface\\Icons\\achievement_zone_icecrown_01", text = UPGRADE_FEATURE_6 },
-		  logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo",
-		  banner = { 0.0, 0.777, 0.411, 0.546 }},
+	TRIAL =	{ [1] = { icon = "Interface\\Icons\\achievement_level_85", text = UPGRADE_FEATURE_7 },
+		  [2] = { icon = "Interface\\Icons\\achievement_firelands raid_ragnaros", text = UPGRADE_FEATURE_8 },
+		  [3] = { icon = "Interface\\Icons\\Ability_Mount_CelestialHorse", text = UPGRADE_FEATURE_9 },
+		  logo = "Interface\\Glues\\Common\\Glues-WoW-CCLogo",
+		  banner = { 0.0, 0.777, 0.138, 0.272 }},
+	[1] =	{ [1] = { icon = "Interface\\Icons\\achievement_level_85", text = UPGRADE_FEATURE_7 },
+		  [2] = { icon = "Interface\\Icons\\achievement_firelands raid_ragnaros", text = UPGRADE_FEATURE_8 },
+		  [3] = { icon = "Interface\\Icons\\Ability_Mount_CelestialHorse", text = UPGRADE_FEATURE_9 },
+		  logo = "Interface\\Glues\\Common\\Glues-WoW-CCLogo",
+		  banner = { 0.0, 0.777, 0.138, 0.272 }},
 	[2] =	{ [1] = { icon = "Interface\\Icons\\achievement_level_85", text = UPGRADE_FEATURE_7 },
 		  [2] = { icon = "Interface\\Icons\\achievement_firelands raid_ragnaros", text = UPGRADE_FEATURE_8 },
 		  [3] = { icon = "Interface\\Icons\\Ability_Mount_CelestialHorse", text = UPGRADE_FEATURE_9 },
@@ -907,9 +917,9 @@ function AccountUpgradePanel_Update(isExpanded)
 		CharSelectAccountUpgradePanel:Hide();
 		CharSelectAccountUpgradeButton:Hide();
 		CharSelectAccountUpgradeMiniPanel:Hide();
-		GameRoomBillingFrame:SetPoint("TOP", CharacterSelectLogo, "BOTTOM", 0, -50);
+		CharacterSelectServerAlertFrame:SetPoint("TOP", CharacterSelectLogo, "BOTTOM", 0, -5);
 	else
-		GameRoomBillingFrame:SetPoint("TOP", CharSelectAccountUpgradePanel, "BOTTOM", 0, -10);
+		CharacterSelectServerAlertFrame:SetPoint("TOP", CharSelectAccountUpgradeMiniPanel, "BOTTOM", 0, -25);
 		local featureTable = ACCOUNT_UPGRADE_FEATURES[tag];
 		CharSelectAccountUpgradeButton:Show();
 		if ( isExpanded ) then
@@ -957,6 +967,21 @@ function AccountUpgradePanel_ToggleExpandState()
 	AccountUpgradePanel_Update(not CharSelectAccountUpgradeButton.isExpanded);
 end
 
+function AccountUpgradePanel_UpdateExpandState()
+	if ( CharacterSelectServerAlertFrame:IsShown() ) then
+		CharSelectAccountUpgradeButton.isExpanded = false;
+		CharSelectAccountUpgradeButton.expandCollapseButton:Hide();
+	elseif ( IsTrialAccount() ) then
+		CharSelectAccountUpgradeButton.isExpanded = true;
+		CharSelectAccountUpgradeButton.expandCollapseButton:Show();
+		CharSelectAccountUpgradeButton.expandCollapseButton:Disable();
+	else
+		CharSelectAccountUpgradeButton.expandCollapseButton:Show();
+		CharSelectAccountUpgradeButton.expandCollapseButton:Enable();
+	end
+	AccountUpgradePanel_Update(CharSelectAccountUpgradeButton.isExpanded);
+end
+
 function CharacterSelect_ScrollList(self, value)
 	if ( not self.blockUpdates ) then
 		CHARACTER_LIST_OFFSET = value;
@@ -968,7 +993,7 @@ end
 function CharacterTemplatesFrame_Update()
 	local self = CharacterTemplatesFrame;
 	local numTemplates = GetNumCharacterTemplates();
-	if ( numTemplates > 0 ) then
+	if ( numTemplates > 0 and IsConnectedToServer() ) then
 		if ( not self:IsShown() ) then
 			-- set it up
 			self:Show();
@@ -996,4 +1021,33 @@ end
 
 function CharacterTemplatesFrameDropDown_OnClick(button)
 	GlueDropDownMenu_SetSelectedID(CharacterTemplatesFrameDropDown, button:GetID());
+end
+
+function PlayersOnServer_Update()
+	local self = PlayersOnServer;
+	local connected = IsConnectedToServer();
+	if (not connected) then
+		self:Hide();
+		return;
+	end
+	
+	local showPlayers, numHorde, numAlliance = GetPlayersOnServer();
+	if showPlayers then
+		if not self:IsShown() then
+			self:Show();
+		end
+		self.HordeCount:SetText(numHorde);
+		self.AllianceCount:SetText(numAlliance);
+		self.HordeStar:SetShown(numHorde < numAlliance);
+		self.AllianceStar:SetShown(numAlliance < numHorde);
+	else
+		self:Hide();
+	end
+end
+
+function CharacterSelect_ActivateFactionChange()
+	if IsConnectedToServer() then
+		EnableChangeFaction();
+		GetCharacterListUpdate();
+	end
 end

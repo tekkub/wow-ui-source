@@ -53,7 +53,7 @@ function RecruitAFriend_OnShow(self)
 	PlaySound("igCharacterInfoOpen");
 
 	local factionGroup, factionName = UnitFactionGroup("player");
-	self.CharacterInfo.Text:SetFormattedText(RAF_REALM_INFO, factionName, CurrentRealmName());
+	self.CharacterInfo.Text:SetFormattedText(RAF_REALM_INFO, factionName, SelectedRealmName());
 
 	RecruitAFriendNameEditBox:SetText("");
 	RecruitAFriendNoteEditBox:SetText("");

@@ -253,8 +253,6 @@ function RaidFinderQueueFrame_UpdateRoles()
 		RaidFinder_UpdateRoleButton(RaidFinderQueueFrameRoleButtonTank, tankLocked);
 		RaidFinder_UpdateRoleButton(RaidFinderQueueFrameRoleButtonHealer, healerLocked);
 		RaidFinder_UpdateRoleButton(RaidFinderQueueFrameRoleButtonDPS, dpsLocked);
-		
-		RaidFinderQueueFrame_SetRoles();
 	end
 end
 
@@ -323,7 +321,9 @@ function RaidFinderRoleButton_OnEnter(self)
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 	GameTooltip:SetText(_G["ROLE_DESCRIPTION_"..self.role], nil, nil, nil, nil, true);
 	if ( self.permDisabled ) then
-		GameTooltip:AddLine(YOUR_CLASS_MAY_NOT_PERFORM_ROLE, 1, 0, 0, true);
+		if(self.permDisabledTip)then
+			GameTooltip:AddLine(self.permDisabledTip, 1, 0, 0, true);
+		end
 	elseif ( self.disabledTooltip and not self:IsEnabled() ) then
 		GameTooltip:AddLine(self.disabledTooltip, 1, 0, 0, true);
 	elseif ( self.lockedIndicator:IsVisible() ) then

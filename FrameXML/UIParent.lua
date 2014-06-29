@@ -11,6 +11,11 @@ PULSEBUTTONS = {};
 -- Shine animation
 SHINES_TO_ANIMATE = {};
 
+-- Macros
+MAX_ACCOUNT_MACROS = 120;
+MAX_CHARACTER_MACROS = 18;
+
+
 -- Per panel settings
 UIPanelWindows = {};
 
@@ -512,7 +517,7 @@ function ToggleGlyphFrame()
 --		return;
 --	end
 
-	if ( UnitLevel("player") < SHOW_INSCRIPTION_LEVEL or ShouldHideGlyphTab() ) then
+	if ( UnitLevel("player") < SHOW_INSCRIPTION_LEVEL or IsCharacterNewlyBoosted() ) then
 		return;
 	end
 
@@ -527,7 +532,7 @@ function OpenGlyphFrame()
 --		return;
 --	end
 
-	if ( UnitLevel("player") < SHOW_INSCRIPTION_LEVEL or ShouldHideGlyphTab() ) then
+	if ( UnitLevel("player") < SHOW_INSCRIPTION_LEVEL or IsCharacterNewlyBoosted() ) then
 		return;
 	end
 
@@ -1502,9 +1507,11 @@ UIPARENT_MANAGED_FRAME_POSITIONS = {
 	["MissingLootFrame"] = {baseY = true, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1};
 	["TutorialFrameAlertButton"] = {baseY = true, yOffset = -10, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, reputation = 1};
 	["FramerateLabel"] = {baseY = true, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1};
-	["CastingBarFrame"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1};
-	["PlayerPowerBarAlt"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1};
+	["ArcheologyDigsiteProgressBar"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1, castingBar = 1};
+	["CastingBarFrame"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1};
+	["PlayerPowerBarAlt"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1};
 	["ExtraActionBarFrame"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1};
+	["DraenorZoneAbilityFrame"] = {baseY = true, yOffset = 100, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1};
 	["ChatFrame1"] = {baseY = true, yOffset = 40, bottomLeft = actionBarOffset-8, justBottomRightAndStance = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, maxLevel = 1, point = "BOTTOMLEFT", rpoint = "BOTTOMLEFT", xOffset = 32};
 	["ChatFrame2"] = {baseY = true, yOffset = 40, bottomRight = actionBarOffset-8, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, rightLeft = -2*actionBarOffset, rightRight = -actionBarOffset, reputation = 1, maxLevel = 1, point = "BOTTOMRIGHT", rpoint = "BOTTOMRIGHT", xOffset = -32};
 	["StanceBarFrame"] = {baseY = 0, bottomLeft = actionBarOffset, reputation = 1, maxLevel = 1, anchorTo = "MainMenuBar", point = "BOTTOMLEFT", rpoint = "TOPLEFT", xOffset = 30};
@@ -1521,11 +1528,13 @@ UIPARENT_MANAGED_FRAME_POSITIONS = {
 	["BATTLEFIELD_TAB_OFFSET_Y"] = {baseY = 210, bottomRight = actionBarOffset, reputation = 1, isVar = "yAxis"};
 	["PETACTIONBAR_YPOS"] = {baseY = 97, bottomLeft = actionBarOffset, justBottomRightAndStance = actionBarOffset, reputation = 1, maxLevel = 1, isVar = "yAxis"};
 	["MULTICASTACTIONBAR_YPOS"] = {baseY = 0, bottomLeft = actionBarOffset, reputation = 1, maxLevel = 1, isVar = "yAxis"};
+	["OBJTRACKER_OFFSET_X"] = {baseX = 10, rightLeft = 2*actionBarOffset-7, rightRight = actionBarOffset-7, isVar = "xAxis"};
 };
 
 -- If any Var entries in UIPARENT_MANAGED_FRAME_POSITIONS are used exclusively by addons, they should be declared here and not in one of the addon's files.
 -- The reason why is that it is possible for UIParent_ManageFramePosition to be run before the addon loads.
 BATTLEFIELD_TAB_OFFSET_Y = 0;
+OBJTRACKER_OFFSET_X = 0;
 
 
 -- constant offsets
@@ -2135,6 +2144,12 @@ function FramePositionDelegate:UIParentManageFramePositions()
 		if (ExtraActionBarFrame and ExtraActionBarFrame:IsShown() ) then
 			tinsert(yOffsetFrames, "extraActionBarFrame");
 		end
+		if (DraenorZoneAbilityFrame and DraenorZoneAbilityFrame:IsShown()) then
+			tinsert(yOffsetFrames, "draenorZoneAbilityFrame");
+		end
+		if ( CastingBarFrame and not CastingBarFrame:GetAttribute("ignoreFramePositionManager") ) then
+			tinsert(yOffsetFrames, "castingBar");
+		end
 	end
 	
 	if ( menuBarTop == 55 ) then
@@ -2152,8 +2167,15 @@ function FramePositionDelegate:UIParentManageFramePositions()
 		if ( value.extraActionBarFrame and ExtraActionBarFrame ) then
 			value.extraActionBarFrame = ExtraActionBarFrame:GetHeight() + 10;
 		end
+		if ( value.draenorZoneAbilityFrame and DraenorZoneAbilityFrame ) then
+			value.draenorZoneAbilityFrame = DraenorZoneAbilityFrame:GetHeight() + 90;
+		end
+
 		if ( value.bonusActionBar and BonusActionBarFrame ) then
 			value.bonusActionBar = BonusActionBarFrame:GetHeight() - MainMenuBar:GetHeight();
+		end
+		if ( value.castingBar ) then
+			value.castingBar = CastingBarFrame:GetHeight() + 14;
 		end
 		securecall("UIParent_ManageFramePosition", index, value, yOffsetFrames, xOffsetFrames, hasBottomLeft, hasBottomRight, hasPetBar);
 	end
@@ -2310,9 +2332,9 @@ function FramePositionDelegate:UIParentManageFramePositions()
 			-- We're using Simple Quest Tracking, automagically size and position!
 			ObjectiveTrackerFrame:ClearAllPoints();
 			-- move up if only the minimap cluster is above, move down a little otherwise
-			ObjectiveTrackerFrame:SetPoint("TOPRIGHT", "MinimapCluster", "BOTTOMRIGHT", -CONTAINER_OFFSET_X, anchorY);
+			ObjectiveTrackerFrame:SetPoint("TOPRIGHT", "MinimapCluster", "BOTTOMRIGHT", -OBJTRACKER_OFFSET_X, anchorY);
 		end
-		ObjectiveTrackerFrame:SetPoint("BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -CONTAINER_OFFSET_X, CONTAINER_OFFSET_Y);
+		ObjectiveTrackerFrame:SetPoint("BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -OBJTRACKER_OFFSET_X, CONTAINER_OFFSET_Y);
 	end
 
 	-- Update chat dock since the dock could have moved
@@ -3251,6 +3273,8 @@ function ToggleGameMenu()
 	elseif ( ClearTarget() and (not UnitIsCharmed("player")) ) then
 	elseif ( OpacityFrame:IsShown() ) then
 		OpacityFrame:Hide();
+	elseif ( SplashFrame:IsShown() ) then
+		SplashFrame_Close();
 	else
 		PlaySound("igMainMenuOpen");
 		ShowUIPanel(GameMenuFrame);

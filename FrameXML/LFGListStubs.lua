@@ -47,6 +47,29 @@ LFG_LIST_MUST_HAVE_NAME = "You must enter a name for your group."
 LFG_LIST_MUST_SELECT_ROLE = "You must select at least one role for which you have a specialization."
 
 LFG_LIST_INVITED_TO_GROUP = "You have been invited to a group:";
+LFG_LIST_ENTRY_DELISTED = "This group is no longer looking for additional members."
+LFG_LIST_APP_UNEMPOWERED = "You are not the group leader.";
+LFG_LIST_SELECT_A_SEARCH_RESULT = "Select a search result."
+LFG_LIST_APP_CURRENTLY_APPLYING = "You are currently being signed up for another group.";
+LFG_LIST_APPLYING_TO = "Signing Up for %s";
+LFG_LIST_ROLE_CHECK = "Role Check"
+LFG_LIST_JOINED_GROUP_NOTICE = "You have joined a group:";
+
+LFG_LIST_PROVING_GROUND_TITLE = "Proving Grounds:";
+
+LFG_LIST_PROVING_TANK_GOLD = "|cffe9f400Gold Tank|r";
+LFG_LIST_PROVING_TANK_SILVER = "|cffc0c0c0Silver Tank|r";
+LFG_LIST_PROVING_TANK_BRONZE = "|cff9b6c00Bronze Tank|r";
+
+LFG_LIST_PROVING_HEALER_GOLD = "|cffe9f400Gold Healer|r";
+LFG_LIST_PROVING_HEALER_SILVER = "|cffc0c0c0Silver Healer|r";
+LFG_LIST_PROVING_HEALER_BRONZE = "|cff9b6c00Bronze Healer|r";
+
+LFG_LIST_PROVING_DAMAGER_GOLD = "|cffe9f400Gold Damage|r";
+LFG_LIST_PROVING_DAMAGER_SILVER = "|cffc0c0c0Silver Damage|r";
+LFG_LIST_PROVING_DAMAGER_BRONZE = "|cff9b6c00Bronze Damage|r";
+
+LFG_LIST_GROUP_FORMING = "Your group is currently forming.";
 
 --[[
 function C_LFGList.GetSearchResults()
@@ -56,7 +79,7 @@ end
 function C_LFGList.GetSearchResultInfo(id)
 	local activities = C_LFGList.GetAvailableActivities();
 	local activity = activities[((id-1) % #activities) + 1];
-	return id, activity, string.format("This is entry %d", id), ((id % 5) == 0) and "No comment" or "", ((id % 3) ~= 0) and "Voice chat "..id or "", id % 3,  (id + 1) % 3, id % 7, (id - 1) * 10, id % 2, id, (id + 12) % 25, (25 - id - ((id + 12) % 25));
+	return id, activity, string.format("This is entry %d", id), ((id % 5) == 0) and "No comment" or "", ((id % 3) ~= 0) and "Voice chat "..id or "", id % 3,  (id + 1) % 3, id % 7, (id - 1) * 10, id % 2, false, id, (id + 12) % 25, (25 - id - ((id + 12) % 25));
 end
 
 function C_LFGList.GetApplicationInfo(id)

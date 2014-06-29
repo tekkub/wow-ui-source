@@ -60,9 +60,15 @@ function UpdateMicroButtonsParent(parent)
 	end
 end
 
-function MoveMicroButtons(anchor, achorTo, relAnchor, x, y, isStacked)
+function MoveMicroButtons(anchor, anchorTo, relAnchor, x, y, isStacked)
 	CharacterMicroButton:ClearAllPoints();
-	CharacterMicroButton:SetPoint(anchor, achorTo, relAnchor, x, y);
+	CharacterMicroButton:SetPoint(anchor, anchorTo, relAnchor, x, y);
+	LFDMicroButton:ClearAllPoints();
+	if ( isStacked ) then
+		LFDMicroButton:SetPoint("TOPLEFT", CharacterMicroButton, "BOTTOMLEFT", 0, 24);
+	else
+		LFDMicroButton:SetPoint("BOTTOMLEFT", GuildMicroButton, "BOTTOMRIGHT", -3, 0);
+	end
 	UpdateMicroButtons();
 end
 
@@ -359,6 +365,19 @@ function TalentMicroButton_OnEvent(self, event, ...)
 		end
 	elseif ( event == "UPDATE_BINDINGS" ) then
 		self.tooltipText =  MicroButtonTooltipText(TALENTS_BUTTON, "TOGGLETALENTS");
+	elseif ( event == "PLAYER_CHARACTER_UPGRADE_TALENT_COUNT_CHANGED" ) then
+		local prev, current = ...;
+		if ( prev == 0 and current > 0 ) then
+			MicroButtonPulse(self);
+			TalentMicroButtonAlert.Text:SetText(TALENT_MICRO_BUTTON_TALENT_TUTORIAL);
+			TalentMicroButtonAlert:SetHeight(TalentMicroButtonAlert.Text:GetHeight()+42);
+			TalentMicroButtonAlert:Show();
+		elseif ( prev ~= current ) then
+			MicroButtonPulse(self);
+			TalentMicroButtonAlert.Text:SetText(TALENT_MICRO_BUTTON_UNSPENT_TALENTS);
+			TalentMicroButtonAlert:SetHeight(TalentMicroButtonAlert.Text:GetHeight()+42);
+			TalentMicroButtonAlert:Show();
+		end
 	end
 end
 

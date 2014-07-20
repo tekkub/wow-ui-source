@@ -6,11 +6,35 @@ ACTIVITY_RETURN_VALUES = {
 	itemLevel = 5,
 };
 
+--Hard-coded values. Should probably make these part of the DB, but it gets a little more complicated with the per-expansion textures
+LFG_LIST_CATEGORY_TEXTURES = {
+	[1] = "groupfinder-button-questing",
+	[2] = "groupfinder-button-dungeons",
+	[3] = "groupfinder-button-raids-", --Prefix for expansion
+	[4] = "groupfinder-button-arenas",
+	[5] = "groupfinder-button-scenarios",
+	[6] = "groupfinder-button-custom-pve",
+	[7] = "groupfinder-button-skirmishes",
+	[8] = "groupfinder-button-battlegrounds",
+	[9] = "groupfinder-button-ratedbgs",
+};
+
+LFG_LIST_PER_EXPANSION_TEXTURES = {
+	[0] = "classic",
+	[1] = "bc",
+	[2] = "wrath",
+	[3] = "cataclysm",
+	[4] = "mists",
+	[5] = "classic",	--Replace with WoD name
+}
+
 -------------------------------------------------------
 ----------Base Frame
 -------------------------------------------------------
 function LFGListFrame_OnLoad(self)
 	self:RegisterEvent("PARTY_LEADER_CHANGED");
+	self:RegisterEvent("GROUP_ROSTER_UPDATE");
+	self:RegisterEvent("PLAYER_ROLES_ASSIGNED");
 	self:RegisterEvent("LFG_LIST_AVAILABILITY_UPDATE");
 	self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE");
 	self:RegisterEvent("LFG_LIST_ENTRY_CREATION_FAILED");
@@ -19,6 +43,7 @@ function LFGListFrame_OnLoad(self)
 	self:RegisterEvent("LFG_LIST_SEARCH_FAILED");
 	self:RegisterEvent("LFG_LIST_APPLICANT_LIST_UPDATED");
 	self:RegisterEvent("LFG_LIST_APPLICANT_UPDATED");
+	LFGListFrame_SetBaseFilters(self, LE_LFG_LIST_FILTER_PVE);
 	LFGListFrame_SetActivePanel(self, self.NothingAvailable);
 
 	self.EventsInBackground = {
@@ -56,6 +81,7 @@ function LFGListFrame_OnEvent(self, event, ...)
 end
 
 function LFGListFrame_OnShow(self)
+	LFGListFrame_FixPanelValid(self);
 	C_LFGList.RequestAvailableActivities();
 	PlaySound("igCharacterInfoOpen");
 end
@@ -71,16 +97,33 @@ end
 function LFGListFrame_IsPanelValid(self, panel)
 	local listed = C_LFGList.GetActiveEntryInfo();
 
+	--If we're listed, make sure we're either viewing applicants or editing our group
 	if ( listed and panel ~= self.ApplicationViewer and not (panel == self.EntryCreation and LFGListEntryCreation_IsEditMode(self.EntryCreation)) ) then
 		return false;
 	end
 
+	--If we're not listed, we can't be viewing applicants or editing our group
 	if ( not listed and (panel == self.ApplicationViewer or
 			(panel == self.EntryCreation and LFGListEntryCreation_IsEditMode(self.EntryCreation)) ) ) then
 		return false;
 	end
 
-	if ( #C_LFGList.GetAvailableCategories() == 0 ) then
+	--Make sure we aren't creating a new entry with different baseFilters
+	if ( panel == self.EntryCreation ) then
+		if ( not LFGListEntryCreation_IsEditMode(self.EntryCreation) and self.baseFilters ~= self.EntryCreation.baseFilters ) then
+			return false;
+		end
+	end
+
+	--Make sure we aren't searching with different baseFilters
+	if ( panel == self.SearchPanel ) then
+		if ( self.baseFilters ~= self.SearchPanel.preferredFilters ) then
+			return false;
+		end
+	end
+
+	--If we don't have any available activities, say so
+	if ( #C_LFGList.GetAvailableCategories(self.baseFilters) == 0 ) then
 		if ( panel == self.CategorySelection ) then
 			return false;
 		end
@@ -98,7 +141,7 @@ function LFGListFrame_GetBestPanel(self)
 
 	if ( listed ) then
 		return self.ApplicationViewer;
-	elseif ( #C_LFGList.GetAvailableCategories() == 0 ) then
+	elseif ( #C_LFGList.GetAvailableCategories(self.baseFilters) == 0 ) then
 		return self.NothingAvailable;
 	else
 		return self.CategorySelection;
@@ -108,6 +151,36 @@ end
 function LFGListFrame_FixPanelValid(self)
 	if ( not LFGListFrame_IsPanelValid(self, self.activePanel) ) then
 		LFGListFrame_SetActivePanel(self, LFGListFrame_GetBestPanel(self));
+	end
+end
+
+function LFGListFrame_SetBaseFilters(self, filters)
+	self.baseFilters = filters;
+
+	--If we need to change panels, do so
+	LFGListFrame_FixPanelValid(self);
+
+	--Update the current panel
+	if ( self.activePanel and self.activePanel.updateAll ) then
+		self.activePanel.updateAll(self.activePanel);
+	end
+end
+
+-------------------------------------------------------
+----------Nothing available frame
+-------------------------------------------------------
+function LFGListNothingAvailable_OnEvent(self, event, ...)
+	--Note: events are dispatched from the base frame. Add RegisterEvent there.
+	if ( event == "LFG_LIST_AVAILABILITY_UPDATE" ) then
+		LFGListNothingAvailable_Update(self);
+	end
+end
+
+function LFGListNothingAvailable_Update(self)
+	if ( C_LFGList.HasActivityList() ) then
+		self.Label:SetText(NO_LFG_LIST_AVAILABLE);
+	else
+		self.Label:SetText(LFG_LIST_LOADING);
 	end
 end
 
@@ -130,32 +203,46 @@ function LFGListCategorySelection_OnShow(self)
 end
 
 function LFGListCategorySelection_UpdateCategoryButtons(self)
-	local categories = C_LFGList.GetAvailableCategories();
+	local baseFilters = self:GetParent().baseFilters;
+	local categories = C_LFGList.GetAvailableCategories(baseFilters);
 
 	local nextBtn = 1;
+	local hasSelected = false;
+
 	--Update category buttons
 	for i=1, #categories do
+		local isSelected = false;
 		local categoryID = categories[i];
 		local name, separateRecommended = C_LFGList.GetCategoryInfo(categoryID);
 
 		if ( separateRecommended ) then
-			nextBtn = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, LE_LFG_LIST_FILTER_RECOMMENDED);
-			nextBtn = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, LE_LFG_LIST_FILTER_NOT_RECOMMENDED);
+			nextBtn, isSelected = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, LE_LFG_LIST_FILTER_RECOMMENDED);
+			hasSelected = hasSelected or isSelected;
+			nextBtn, isSelected = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, LE_LFG_LIST_FILTER_NOT_RECOMMENDED);
 		else
-			nextBtn = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, 0);
+			nextBtn, isSelected = LFGListCategorySelection_AddButton(self, nextBtn, categoryID, 0);
 		end
+
+		hasSelected = hasSelected or isSelected;
 	end
 
 	--Hide any extra buttons
 	for i=nextBtn, #self.CategoryButtons do
 		self.CategoryButtons[i]:Hide();
 	end
+
+	--If the selected item isn't in the list, deselect it
+	if ( self.selectedCategory and not hasSelected ) then
+		LFGListCategorySelection_SelectCategory(self, nil, nil);
+	end
 end
 
 function LFGListCategorySelection_AddButton(self, btnIndex, categoryID, filters)
 	--Check that we have activities with this filter
-	if ( filters ~= 0 and #C_LFGList.GetAvailableActivities(categoryID, nil, filters) == 0) then
-		return btnIndex;
+	local baseFilters = self:GetParent().baseFilters;
+
+	if ( filters ~= 0 and #C_LFGList.GetAvailableActivities(categoryID, nil, bit.bor(baseFilters, filters)) == 0) then
+		return btnIndex, false;
 	end
 
 	local name, separateRecommended = C_LFGList.GetCategoryInfo(categoryID);
@@ -170,13 +257,20 @@ function LFGListCategorySelection_AddButton(self, btnIndex, categoryID, filters)
 	button:SetText(LFGListUtil_GetDecoratedCategoryName(name, filters, true));
 	button.categoryID = categoryID;
 	button.filters = filters;
-	if ( self.selectedCategory == categoryID and self.selectedFilters == filters ) then
-		button:LockHighlight();
+
+	if ( bit.band(filters, LE_LFG_LIST_FILTER_RECOMMENDED) ~= 0 ) then
+		button.Icon:SetAtlas(LFG_LIST_CATEGORY_TEXTURES[categoryID]..LFG_LIST_PER_EXPANSION_TEXTURES[LFGListUtil_GetCurrentExpansion()]);
+	elseif ( bit.band(filters, LE_LFG_LIST_FILTER_NOT_RECOMMENDED) ~= 0 ) then
+		button.Icon:SetAtlas(LFG_LIST_CATEGORY_TEXTURES[categoryID]..LFG_LIST_PER_EXPANSION_TEXTURES[math.max(0,LFGListUtil_GetCurrentExpansion() - 1)]);
 	else
-		button:UnlockHighlight();
+		button.Icon:SetAtlas(LFG_LIST_CATEGORY_TEXTURES[categoryID]);
 	end
 
-	return btnIndex + 1;
+	local selected = self.selectedCategory == categoryID and self.selectedFilters == filters;
+	button.SelectedTexture:SetShown(selected);
+	button:Show();
+
+	return btnIndex + 1, selected;
 end
 
 function LFGListCategorySelection_SelectCategory(self, categoryID, filters)
@@ -215,8 +309,11 @@ function LFGListCategorySelectionStartGroupButton_OnClick(self)
 		return;
 	end
 
+	local baseFilters = panel:GetParent().baseFilters;
+
 	local entryCreation = panel:GetParent().EntryCreation;
 	LFGListEntryCreation_Clear(entryCreation);
+	LFGListEntryCreation_SetBaseFilters(entryCreation, baseFilters);
 	LFGListEntryCreation_SetEditMode(entryCreation, false);
 	LFGListEntryCreation_Select(entryCreation, panel.selectedFilters, panel.selectedCategory);
 	LFGListFrame_SetActivePanel(panel:GetParent(), entryCreation);
@@ -228,9 +325,11 @@ function LFGListCategorySelectionFindGroupButton_OnClick(self)
 		return;
 	end
 
+	local baseFilters = panel:GetParent().baseFilters;
+
 	local searchPanel = panel:GetParent().SearchPanel;
 	LFGListSearchPanel_Clear(searchPanel);
-	LFGListSearchPanel_SetCategory(searchPanel, panel.selectedCategory, panel.selectedFilters);
+	LFGListSearchPanel_SetCategory(searchPanel, panel.selectedCategory, panel.selectedFilters, baseFilters);
 	LFGListSearchPanel_DoSearch(searchPanel);
 	LFGListFrame_SetActivePanel(panel:GetParent(), searchPanel);
 end
@@ -249,6 +348,7 @@ function LFGListEntryCreation_OnLoad(self)
 	LFGListUtil_SetUpDropDown(self, self.CategoryDropDown, LFGListEntryCreation_PopulateCategories, LFGListEntryCreation_OnCategorySelected);
 	LFGListUtil_SetUpDropDown(self, self.GroupDropDown, LFGListEntryCreation_PopulateGroups, LFGListEntryCreation_OnGroupSelected);
 	LFGListUtil_SetUpDropDown(self, self.ActivityDropDown, LFGListEntryCreation_PopulateActivities, LFGListEntryCreation_OnActivitySelected);
+	LFGListEntryCreation_SetBaseFilters(self, 0);
 end
 
 function LFGListEntryCreation_Clear(self)
@@ -266,19 +366,21 @@ function LFGListEntryCreation_Clear(self)
 	self.VoiceChat.EditBox:SetText("");
 	self.Description.EditBox:SetText("");
 
+	self.ActivityFinder:Hide();
+
 	LFGListEntryCreation_UpdateValidState(self);
 end
 
 --This function accepts any or all of categoryID, groupId, and activityID
 function LFGListEntryCreation_Select(self, filters, categoryID, groupID, activityID)
-	filters, categoryID, groupID, activityID = LFGListUtil_AugmentWithBest(filters, categoryID, groupID, activityID);
+	filters, categoryID, groupID, activityID = LFGListUtil_AugmentWithBest(bit.bor(self.baseFilters,filters or 0), categoryID, groupID, activityID);
 	self.selectedCategory = categoryID;
 	self.selectedGroup = groupID;
 	self.selectedActivity = activityID;
 	self.selectedFilters = filters;
 
 	--Update the category dropdown
-	local categoryName = C_LFGList.GetCategoryInfo(categoryID);
+	local categoryName, _, autoChoose = C_LFGList.GetCategoryInfo(categoryID);
 	UIDropDownMenu_SetText(self.CategoryDropDown, LFGListUtil_GetDecoratedCategoryName(categoryName, filters, false));
 
 	--Update the activity dropdown
@@ -288,11 +390,12 @@ function LFGListEntryCreation_Select(self, filters, categoryID, groupID, activit
 	--Update the group dropdown. If the group dropdown is showing an activity, hide the activity dropdown
 	local groupName = C_LFGList.GetActivityGroupInfo(groupID);
 	UIDropDownMenu_SetText(self.GroupDropDown, groupName or shortName);
-	self.ActivityDropDown:SetShown(groupName);
+	self.ActivityDropDown:SetShown(groupName and not autoChoose);
+	self.GroupDropDown:SetShown(not autoChoose);
 end
 
 function LFGListEntryCreation_PopulateCategories(self, dropDown, info)
-	local categories = C_LFGList.GetAvailableCategories();
+	local categories = C_LFGList.GetAvailableCategories(self.baseFilters);
 	for i=1, #categories do
 		local categoryID = categories[i];
 		local name, separateRecommended = C_LFGList.GetCategoryInfo(categoryID);
@@ -328,58 +431,143 @@ function LFGListEntryCreation_PopulateGroups(self, dropDown, info)
 		return;
 	end
 
-	local groups = C_LFGList.GetAvailableActivityGroups(self.selectedCategory, self.selectedFilters);
+	local useMore = self.selectedFilters == 0;
+
+	--Start out displaying everything
+	local groups = C_LFGList.GetAvailableActivityGroups(self.selectedCategory, bit.bor(self.baseFilters, self.selectedFilters));
+	local activities = C_LFGList.GetAvailableActivities(self.selectedCategory, 0, bit.bor(self.baseFilters, self.selectedFilters));
+	if ( useMore ) then
+		--We don't bother filtering if we have less than 5 items anyway
+		if ( #groups + #activities > 5 ) then
+			--Try just displaying the recommended
+			local filters = bit.bor(self.selectedFilters, self.baseFilters, LE_LFG_LIST_FILTER_RECOMMENDED);
+			local recGroups = C_LFGList.GetAvailableActivityGroups(self.selectedCategory, filters);
+			local recActivities = C_LFGList.GetAvailableActivities(self.selectedCategory, 0, filters);
+
+			--If we still have just as many, we don't need to display more
+			useMore = #recGroups ~= #groups or #recActivities ~= #activities;
+
+			--If we have some recommended, just display those
+			if ( #recGroups + #recActivities > 0 ) then
+				groups = recGroups;
+				activities = recActivities;
+			else
+				--We want to display at least some. Just do some number of activities and groups
+				for i=#groups, 5, -1 do
+					groups[i] = nil;
+				end
+				for i=#activities, 5, -1 do
+					activities[i] = nil;
+				end
+			end
+		else
+			useMore = false;
+		end
+	end
+
 	for i=1, #groups do
 		local groupID = groups[i];
 		local name = C_LFGList.GetActivityGroupInfo(groupID);
 
 		info.text = name;
 		info.value = groupID;
-		info.arg1 = false;	--isActuallyActivity
+		info.arg1 = "group";
 		info.checked = (self.selectedGroup == groupID);
 		info.isRadio = true;
 		UIDropDownMenu_AddButton(info);
 	end
 
 	--We also have in this dropdown any activities that have no parents
-	local activities = C_LFGList.GetAvailableActivities(self.selectedCategory, 0, self.selectedFilters);
 	for i=1, #activities do
 		local activityID = activities[i];
 		local name = select(ACTIVITY_RETURN_VALUES.shortName, C_LFGList.GetActivityInfo(activityID));
 
 		info.text = name;
 		info.value = activityID;
-		info.arg1 = true;	--isActuallyActivity
+		info.arg1 = "activity";
 		info.checked = (self.selectedActivity == activityID);
 		info.isRadio = true;
 		UIDropDownMenu_AddButton(info);
 	end
+
+	if ( useMore ) then
+		info.text = LFG_LIST_MORE;
+		info.value = nil;
+		info.arg1 = "more";
+		info.notCheckable = true;
+		info.checked = false;
+		info.isRadio = false;
+		UIDropDownMenu_AddButton(info);
+	end
 end
 
-function LFGListEntryCreation_OnGroupSelected(self, id, isActuallyActivity)
-	if ( isActuallyActivity ) then
+function LFGListEntryCreation_OnGroupSelected(self, id, buttonType)
+	if ( buttonType == "activity" ) then
 		LFGListEntryCreation_Select(self, nil, nil, nil, id);
-	else
+	elseif ( buttonType == "group" ) then
 		LFGListEntryCreation_Select(self, self.selectedFilters, self.selectedCategory, id, nil);
+	elseif ( buttonType == "more" ) then
+		LFGListEntryCreationActivityFinder_Show(self.ActivityFinder, self.selectedCategory, nil, bit.bor(self.baseFilters, self.selectedFilters));
 	end
 end
 
 function LFGListEntryCreation_PopulateActivities(self, dropDown, info)
-	local activities = C_LFGList.GetAvailableActivities(self.selectedCategory, self.selectedGroup, self.selectedFilters);
+	local useMore = self.selectedFilters == 0;
+
+	local filters = bit.bor(self.baseFilters, self.selectedFilters);
+
+	--Start out displaying everything
+	local activities = C_LFGList.GetAvailableActivities(self.selectedCategory, self.selectedGroup, filters);
+
+	--If we're displaying more than 5, see if we can just display recommended
+	if ( useMore ) then
+		if ( #activities > 5 ) then
+			filters = bit.bor(filters, LE_LFG_LIST_FILTER_RECOMMENDED);
+			local recActivities = C_LFGList.GetAvailableActivities(self.selectedCategory, self.selectedGroup, filters);
+
+			useMore = #recActivities ~= #activities;
+			if ( #recActivities > 0 ) then
+				activities = recActivities;
+			else
+				--Just display up to 5 non-recommended activities
+				for i=#activities, 5, -1 do
+					activities[i] = nil;
+				end
+			end
+		else
+			useMore = false;
+		end
+	end
+
 	for i=1, #activities do
 		local activityID = activities[i];
 		local shortName = select(ACTIVITY_RETURN_VALUES.shortName, C_LFGList.GetActivityInfo(activityID));
 
 		info.text = shortName;
 		info.value = activityID;
+		info.arg1 = "activity";
 		info.checked = (self.selectedActivity == activityID);
 		info.isRadio = true;
 		UIDropDownMenu_AddButton(info);
 	end
+
+	if ( useMore ) then
+		info.text = LFG_LIST_MORE;
+		info.value = nil;
+		info.arg1 = "more";
+		info.notCheckable = true;
+		info.checked = false;
+		info.isRadio = false;
+		UIDropDownMenu_AddButton(info);
+	end
 end
 
-function LFGListEntryCreation_OnActivitySelected(self, activityID)
-	LFGListEntryCreation_Select(self, nil, nil, nil, activityID);
+function LFGListEntryCreation_OnActivitySelected(self, activityID, buttonType)
+	if ( buttonType == "activity" ) then
+		LFGListEntryCreation_Select(self, nil, nil, nil, activityID);
+	elseif ( buttonType == "more" ) then
+		LFGListEntryCreationActivityFinder_Show(self.ActivityFinder, self.selectedCategory, self.selectedGroup, bit.bor(self.baseFilters, self.selectedFilters));
+	end
 end
 
 function LFGListEntryCreation_ListGroup(self)
@@ -403,6 +591,11 @@ function LFGListEntryCreation_UpdateValidState(self)
 
 	self.ListGroupButton:SetEnabled(not errorText);
 	self.ListGroupButton.errorText = errorText;
+end
+
+
+function LFGListEntryCreation_SetBaseFilters(self, baseFilters)
+	self.baseFilters = baseFilters;
 end
 
 function LFGListEntryCreation_SetEditMode(self, editMode)
@@ -449,6 +642,72 @@ function LFGListEntryCreationListGroupButton_OnClick(self)
 	LFGListEntryCreation_ListGroup(self:GetParent());
 end
 
+function LFGListEntryCreationActivityFinder_OnLoad(self)
+	self.Dialog.ScrollFrame.update = function() LFGListEntryCreationActivityFinder_Update(self); end;
+	self.Dialog.ScrollFrame.scrollBar.doNotHide = true;
+	HybridScrollFrame_CreateButtons(self.Dialog.ScrollFrame, "LFGListEntryCreationActivityListTemplate");
+
+	self.matchingActivities = {};
+end
+
+function LFGListEntryCreationActivityFinder_Show(self, categoryID, groupID, filters)
+	self.Dialog.EntryBox:SetText("");
+	self.categoryID = categoryID;
+	self.groupID = groupID;
+	self.filters = filters;
+	self.selectedActivity = nil;
+	LFGListEntryCreationActivityFinder_UpdateMatching(self);
+	self:Show();
+end
+
+function LFGListEntryCreationActivityFinder_UpdateMatching(self)
+	self.matchingActivities = C_LFGList.GetAvailableActivities(self.categoryID, self.groupID, self.filters, self.Dialog.EntryBox:GetText());
+	if ( not self.selectedActivity or not tContains(self.matchingActivities, self.selectedActivity) ) then
+		self.selectedActivity = self.matchingActivities[1];
+	end
+	LFGListEntryCreationActivityFinder_Update(self);
+end
+
+function LFGListEntryCreationActivityFinder_Update(self)
+	local actitivities = self.matchingActivities;
+
+	local offset = HybridScrollFrame_GetOffset(self.Dialog.ScrollFrame);
+
+	for i=1, #self.Dialog.ScrollFrame.buttons do
+		local button = self.Dialog.ScrollFrame.buttons[i];
+		local idx = i + offset;
+		local id = actitivities[idx];
+		if ( id ) then
+			button:SetText( (C_LFGList.GetActivityInfo(id)) );
+			button.activityID = id;
+			button.Selected:SetShown(self.selectedActivity == id);
+			if ( self.selectedActivity == id ) then
+				button:LockHighlight();
+			else
+				button:UnlockHighlight();
+			end
+			button:Show();
+		else
+			button:Hide();
+		end
+	end
+	HybridScrollFrame_Update(self.Dialog.ScrollFrame, self.Dialog.ScrollFrame.buttons[1]:GetHeight() * #actitivities, self.Dialog.ScrollFrame:GetHeight());
+end
+
+function LFGListEntryCreationActivityFinder_Accept(self)
+	LFGListEntryCreation_Select(self:GetParent(), nil, nil, nil, self.selectedActivity);
+	self:Hide();
+end
+
+function LFGListEntryCreationActivityFinder_Cancel(self)
+	self:Hide();
+end
+
+function LFGListEntryCreationActivityFinder_Select(self, activityID)
+	self.selectedActivity = activityID;
+	LFGListEntryCreationActivityFinder_Update(self);
+end
+
 -------------------------------------------------------
 ----------Application Viewing
 -------------------------------------------------------
@@ -473,6 +732,11 @@ function LFGListApplicationViewer_OnEvent(self, event, ...)
 		if ( not LFGListUtil_IsEntryEmpowered() ) then
 			C_LFGList.RemoveApplicant(id);
 		end
+	elseif ( event == "GROUP_ROSTER_UPDATE" ) then
+		LFGListApplicationViewer_UpdateAvailability(self);
+		LFGListApplicationViewer_UpdateRoleCount(self);
+	elseif ( event == "PLAYER_ROLES_ASSIGNED") then
+		LFGListApplicationViewer_UpdateRoleCount(self);
 	end
 end
 
@@ -482,6 +746,7 @@ function LFGListApplicationViewer_OnShow(self)
 	LFGListApplicationViewer_UpdateResults(self);
 	LFGListApplicationViewer_UpdateInfo(self);
 	LFGListApplicationViewer_UpdateAvailability(self);
+	LFGListApplicationViewer_UpdateRoleCount(self);
 end
 
 function LFGListApplicationViewer_OnUpdate(self)
@@ -491,6 +756,17 @@ function LFGListApplicationViewer_OnUpdate(self)
 	else
 		self.Duration:SetText("");
 	end
+end
+
+function LFGListApplicationViewer_UpdateRoleCount(self)
+	local tanks, healers, damage, other = GetPartyRoleCount(LE_PARTY_CATEGORY_HOME);
+	
+	--Just count anyone who doesn't have a role as "damage".
+	damage = damage + other;
+	self.TankCount:SetText(tanks);
+	self.HealerCount:SetText(healers);
+	self.DamagerCount:SetText(damage);
+	self.TotalCount:SetText(tanks + healers + damage);
 end
 
 function LFGListApplicationViewer_UpdateInfo(self)
@@ -599,7 +875,7 @@ function LFGListApplicationViewer_UpdateApplicant(button, id)
 	for i=1, numMembers do
 		local member = button.Members[i];
 		if ( not member ) then
-			member = CreateFrame("FRAME", nil, button, "LFGListApplicantMemberTemplate");
+			member = CreateFrame("BUTTON", nil, button, "LFGListApplicantMemberTemplate");
 			member:SetPoint("TOPLEFT", button.Members[i-1], "BOTTOMLEFT", 0, 0);
 			button.Members[i] = member;
 		end
@@ -850,16 +1126,17 @@ function LFGListSearchPanel_Clear(self)
 	LFGListSearchPanel_UpdateResults(self);
 end
 
-function LFGListSearchPanel_SetCategory(self, categoryID, filters)
+function LFGListSearchPanel_SetCategory(self, categoryID, filters, preferredFilters)
 	self.categoryID = categoryID;
 	self.filters = filters;
+	self.preferredFilters = preferredFilters;
 
 	local name = LFGListUtil_GetDecoratedCategoryName(C_LFGList.GetCategoryInfo(categoryID), filters, false);
 	self.CategoryName:SetText(name);
 end
 
 function LFGListSearchPanel_DoSearch(self)
-	C_LFGList.Search(self.categoryID, self.SearchBox:GetText(), self.filters);
+	C_LFGList.Search(self.categoryID, self.SearchBox:GetText(), self.filters, self.preferredFilters);
 	self.searching = true;
 	self.searchFailed = false;
 	self.selectedResult = nil;
@@ -959,6 +1236,7 @@ end
 function LFGListSearchEntry_OnLoad(self)
 	self:RegisterEvent("LFG_LIST_SEARCH_RESULT_UPDATED");
 	self:RegisterEvent("LFG_ROLE_CHECK_UPDATE");
+	self:RegisterForClicks("LeftButtonUp", "RightButtonUp");
 end
 
 function LFGListSearchEntry_Update(self)
@@ -1107,14 +1385,18 @@ function LFGListSearchEntry_OnEvent(self, event, ...)
 	end
 end
 
-function LFGListSearchEntry_OnClick(self)
+function LFGListSearchEntry_OnClick(self, button)
 	local scrollFrame = self:GetParent():GetParent();
-	LFGListSearchPanel_SelectResult(scrollFrame:GetParent(), self.resultID);
+	if ( button == "RightButton" ) then
+		EasyMenu(LFGListUtil_GetSearchEntryMenu(self.resultID), LFGListFrameDropDown, self, 0, -2, "MENU");
+	else
+		LFGListSearchPanel_SelectResult(scrollFrame:GetParent(), self.resultID);
+	end
 end
 
 function LFGListSearchEntry_OnEnter(self)
 	local resultID = self.resultID;
-	local id, activityID, name, comment, voiceChat, iLvl, age, numBNetFriends, numCharFriends, numGuildMates, isDelisted, numTanks, numHealers, numDPS = C_LFGList.GetSearchResultInfo(resultID);
+	local id, activityID, name, comment, voiceChat, iLvl, age, numBNetFriends, numCharFriends, numGuildMates, isDelisted, numTanks, numHealers, numDPS, leaderName = C_LFGList.GetSearchResultInfo(resultID);
 	local activityName = C_LFGList.GetActivityInfo(activityID);
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 	GameTooltip:SetText(name, 1, 1, 1, true);
@@ -1133,8 +1415,15 @@ function LFGListSearchEntry_OnEnter(self)
 		GameTooltip:AddLine(" ");
 	end
 
+	if ( leaderName ) then
+		GameTooltip:AddLine(string.format(LFG_LIST_TOOLTIP_LEADER, leaderName));
+	end
 	if ( age > 0 ) then
 		GameTooltip:AddLine(string.format(LFG_LIST_TOOLTIP_AGE, SecondsToTime(age, false, false, 1, false)));
+	end
+
+	if ( leaderName or age > 0 ) then
+		GameTooltip:AddLine(" ");
 	end
 	GameTooltip:AddLine(string.format(LFG_LIST_TOOLTIP_MEMBERS, numTanks + numHealers + numDPS, numTanks, numHealers, numDPS));
 
@@ -1387,14 +1676,18 @@ end
 -------------------------------------------------------
 function LFGListUtil_AugmentWithBest(filters, categoryID, groupID, activityID)
 	if ( not activityID ) then
-		--Find the best activity by iLevel
+		--Find the best activity by iLevel and recommended flag
 		local activities = C_LFGList.GetAvailableActivities(categoryID, groupID, filters);
-		local bestItemLevel;
+		local bestItemLevel, bestRecommended;
 		for i=1, #activities do
-			local iLevel = select(ACTIVITY_RETURN_VALUES.itemLevel, C_LFGList.GetActivityInfo(activities[i]));
-			if ( not activityID or (iLevel > bestItemLevel and iLevel <= GetAverageItemLevel()) ) then
+			local fullName, shortName, categoryID, groupID, iLevel, filters = C_LFGList.GetActivityInfo(activities[i]);
+			local isRecommended = bit.band(filters, LE_LFG_LIST_FILTER_RECOMMENDED) ~= 0;
+			if (	not activityID
+				or	(not bestRecommended and isRecommended)
+				or	(bestRecommended == isRecommended and iLevel > bestItemLevel and iLevel <= GetAverageItemLevel()) ) then
 				activityID = activities[i];
 				bestItemLevel = iLevel;
+				bestRecommended = isRecommended;
 			end
 		end
 
@@ -1444,6 +1737,17 @@ function LFGListUtil_ValidateLevelReq(text)
 	end
 end
 
+function LFGListUtil_GetCurrentExpansion()
+	for i=0, #MAX_PLAYER_LEVEL_TABLE do
+		if ( UnitLevel("player") <= MAX_PLAYER_LEVEL_TABLE[i] ) then
+			return i;
+		end
+	end
+
+	--We're higher than the highest level. Weird.
+	return #MAX_PLAYER_LEVEL_TABLE;
+end
+
 function LFGListUtil_GetDecoratedCategoryName(categoryName, filter, useColors)
 	if ( filter == 0 ) then
 		return categoryName;
@@ -1460,12 +1764,8 @@ function LFGListUtil_GetDecoratedCategoryName(categoryName, filter, useColors)
 	if ( filter == LE_LFG_LIST_FILTER_NOT_RECOMMENDED ) then
 		extraName = LFG_LIST_LEGACY;
 	elseif ( filter == LE_LFG_LIST_FILTER_RECOMMENDED ) then
-		for i=0, #MAX_PLAYER_LEVEL_TABLE do
-			if ( UnitLevel("player") <= MAX_PLAYER_LEVEL_TABLE[i] ) then
-				extraName = _G["EXPANSION_NAME"..i];
-				break;
-			end
-		end
+		local exp = LFGListUtil_GetCurrentExpansion();
+		extraName = _G["EXPANSION_NAME"..exp];
 	end
 
 	return string.format(LFG_LIST_CATEGORY_FORMAT, categoryName, colorStart, extraName, colorEnd);
@@ -1539,4 +1839,84 @@ function LFGListUtil_AppendStatistic(label, value, title, lastTitle)
 	end
 
 	GameTooltip:AddLine(string.format(label, value));
+end
+
+local LFG_LIST_SEARCH_ENTRY_MENU = {
+	{
+		text = nil,	--Group name goes here
+		isTitle = true,
+		notCheckable = true,
+	},
+	{
+		text = WHISPER_LEADER,
+		func = function(_, name) ChatFrame_SendTell(name); end,
+		notCheckable = true,
+		arg1 = nil, --Leader name goes here
+		disabled = nil, --Disabled if we don't have a leader name yet
+	},
+	{
+		text = LFG_LIST_REPORT_GROUP_FOR,
+		hasArrow = true,
+		notCheckable = true,
+		menuList = {
+			{
+				text = LFG_LIST_BAD_NAME,
+				notCheckable = true,
+				disabled = true,
+			},
+			{
+				text = LFG_LIST_BAD_DESCRIPTION,
+				notCheckable = true,
+				disabled = true,
+			},
+		},
+	},
+};
+
+function LFGListUtil_GetSearchEntryMenu(resultID)
+	local id, activityID, name, comment, voiceChat, iLvl, age, numBNetFriends, numCharFriends, numGuildMates, isDelisted, numTanks, numHealers, numDPS, leaderName = C_LFGList.GetSearchResultInfo(resultID);
+	LFG_LIST_SEARCH_ENTRY_MENU[1].text = name;
+	LFG_LIST_SEARCH_ENTRY_MENU[2].arg1 = leaderName;
+	LFG_LIST_SEARCH_ENTRY_MENU[2].disabled = not leaderName;
+	return LFG_LIST_SEARCH_ENTRY_MENU;
+end
+
+local LFG_LIST_APPLICANT_MEMBER_MENU = {
+	{
+		text = nil,	--Player name goes here
+		isTitle = true,
+		notCheckable = true,
+	},
+	{
+		text = WHISPER,
+		func = function(_, name) ChatFrame_SendTell(name); end,
+		notCheckable = true,
+		arg1 = nil, --Player name goes here
+		disabled = nil, --Disabled if we don't have a name yet
+	},
+	{
+		text = LFG_LIST_REPORT_FOR,
+		hasArrow = true,
+		notCheckable = true,
+		menuList = {
+			{
+				text = LFG_LIST_BAD_NAME,
+				notCheckable = true,
+				disabled = true,
+			},
+			{
+				text = LFG_LIST_BAD_DESCRIPTION,
+				notCheckable = true,
+				disabled = true,
+			},
+		},
+	},
+};
+
+function LFGListUtil_GetApplicantMemberMenu(applicantID, memberIdx)
+	local name, class, localizedClass, level, itemLevel, tank, healer, damage, assignedRole = C_LFGList.GetApplicantMemberInfo(applicantID, memberIdx);
+	LFG_LIST_APPLICANT_MEMBER_MENU[1].text = name or " ";
+	LFG_LIST_APPLICANT_MEMBER_MENU[2].arg1 = name;
+	LFG_LIST_APPLICANT_MEMBER_MENU[2].disabled = not name;
+	return LFG_LIST_APPLICANT_MEMBER_MENU;
 end

@@ -1,4 +1,4 @@
-GARRISON_FOLLOWER_TOOLTIP_FULL_XP_WIDTH = 190;
+GARRISON_FOLLOWER_TOOLTIP_FULL_XP_WIDTH = 180;
 
 -------------------------------------------
 local GARRISON_FOLLOWER_FLOATING_TOOLTIP = {};
@@ -53,34 +53,35 @@ function GarrisonFollowerTooltipTemplate_SetGarrisonFollower(tooltipFrame, data)
 	tooltipFrame.ILevel:SetFormattedText(GARRISON_FOLLOWER_ITEM_LEVEL, data.itemLevel);
 	tooltipFrame.ClassSpecName:SetText(data.classSpecName);
 	tooltipFrame.Portrait.Level:SetText(data.level);
-	tooltipFrame.XP:SetFormattedText(GARRISON_FOLLOWER_TOOLTIP_XP, data.levelxp - data.xp);
 	SetPortraitTexture(tooltipFrame.Portrait.Portrait, data.displayID);
 	local color = ITEM_QUALITY_COLORS[data.quality];
 	tooltipFrame.Portrait.LevelBorder:SetVertexColor(color.r, color.g, color.b);
 	tooltipFrame.Class:SetAtlas(data.classSpecAtlas);
-	
-	local followerLevelCap = 100;
-	if (data.xp == 0 or data.levelxp == 0) then
-		tooltipFrame.XPBar:Hide();
-	else
-		tooltipFrame.XPBar:Show();
-		tooltipFrame.XPBar:SetWidth((data.xp / data.levelxp) * GARRISON_FOLLOWER_TOOLTIP_FULL_XP_WIDTH);
-	end
 
 	if (not data.collected) then
 		tooltipFrame.ILevel:Hide();
 		tooltipFrame.XP:Hide();
 		tooltipFrame.XPBar:Hide();
 		tooltipFrame.XPBarBackground:Hide();
-	elseif (data.level == followerLevelCap) then
+	elseif (data.level == GARRISON_FOLLOWER_MAX_LEVEL and data.quality >= GARRISON_FOLLOWER_MAX_UPGRADE_QUALITY) then
 		tooltipFrame.ILevel:Show();
 		tooltipFrame.XP:Hide();
 		tooltipFrame.XPBar:Hide();
 		tooltipFrame.XPBarBackground:Hide();
 	else
 		tooltipFrame.ILevel:Hide();
+		if (data.level == GARRISON_FOLLOWER_MAX_LEVEL) then
+			tooltipFrame.XP:SetFormattedText(GARRISON_FOLLOWER_TOOLTIP_UPGRADE_XP, data.levelxp - data.xp);
+		else
+			tooltipFrame.XP:SetFormattedText(GARRISON_FOLLOWER_TOOLTIP_XP, data.levelxp - data.xp);
+		end
 		tooltipFrame.XP:Show();
-		tooltipFrame.XPBar:Show();
+		tooltipFrame.XPBar:SetWidth((data.xp / data.levelxp) * GARRISON_FOLLOWER_TOOLTIP_FULL_XP_WIDTH);
+		if (data.xp == 0) then
+			tooltipFrame.XPBar:Hide()
+		else
+			tooltipFrame.XPBar:Show();
+		end
 		tooltipFrame.XPBarBackground:Show();
 	end
 
@@ -298,4 +299,48 @@ function GarrisonFollowerAbilityTooltipTemplate_SetAbility(tooltipFrame, garrFol
 			tooltipFrame.CounterIconBorder:Hide();
 		end
 	end
+end
+
+function FloatingGarrisonMission_Toggle(garrMissionID)
+	if ( FloatingGarrisonMissionTooltip:IsShown() and
+		FloatingGarrisonMissionTooltip.garrMissionID == garrMissionID) then
+		FloatingGarrisonMissionTooltip:Hide();
+	else
+		FloatingGarrisonMission_Show(garrMissionID);
+	end
+end
+
+function FloatingGarrisonMission_Show(garrMissionID)
+	FloatingGarrisonMissionTooltip:Show();
+	FloatingGarrisonMissionTooltip.garrMissionID = garrMissionID;
+	FloatingGarrisonMissionTooltip.Name:SetText(C_Garrison.GetMissionName(garrMissionID));
+	FloatingGarrisonMissionTooltip.FollowerRequirement:SetFormattedText(GARRISON_MISSION_TOOLTIP_NUM_REQUIRED_FOLLOWERS, C_Garrison.GetMissionMaxFollowers(garrMissionID), 1, 1, 1);
+	
+	local rewards = C_Garrison.GetMissionRewardInfo(garrMissionID);
+	local rewardText = "";
+	
+	local missionFrameHeightBase = 70;
+	FloatingGarrisonMissionTooltip:SetHeight(missionFrameHeightBase);
+
+	for id, reward in pairs(rewards) do
+		if string.len(rewardText) > 0 then
+			rewardText = rewardText.."\n";
+		end
+
+		if (reward.quality) then
+			rewardText = rewardText..ITEM_QUALITY_COLORS[reward.quality + 1].hex..reward.title..FONT_COLOR_CODE_CLOSE;
+		elseif (reward.itemID) then 
+			local itemName, _, itemRarity, _, _, _, _, _, _, itemTexture = GetItemInfo(reward.itemID);
+			if itemName then
+				rewardText = rewardText..ITEM_QUALITY_COLORS[itemRarity].hex..itemName..FONT_COLOR_CODE_CLOSE;
+			end
+		elseif (reward.followerXP) then
+			rewardText = rewardText..reward.title;
+		else
+			rewardText = rewardText..reward.title;
+		end
+	end
+	
+	FloatingGarrisonMissionTooltip.Rewards:SetText(rewardText, 1, 1, 1);
+	FloatingGarrisonMissionTooltip:SetHeight(FloatingGarrisonMissionTooltip:GetHeight() + FloatingGarrisonMissionTooltip.Rewards:GetHeight());
 end

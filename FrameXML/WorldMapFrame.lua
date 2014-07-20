@@ -2,6 +2,7 @@
 NUM_WORLDMAP_POIS = 0;
 NUM_WORLDMAP_WORLDEFFECT_POIS = 0;
 NUM_WORLDMAP_SCENARIO_POIS = 0;
+NUM_WORLDMAP_TASK_POIS = 0;
 NUM_WORLDMAP_GRAVEYARDS = 0;
 NUM_WORLDMAP_OVERLAYS = 0;
 NUM_WORLDMAP_FLAGS = 4;
@@ -25,6 +26,7 @@ QUESTFRAME_PADDING = 19;
 WORLDMAP_POI_FRAMELEVEL = 100;		-- needs to be one the highest frames in the MEDIUM strata
 WORLDMAP_WINDOWED_SIZE = 0.695;		-- size corresponds to ratio value
 WORLDMAP_FULLMAP_SIZE = 1.0;
+MINIMAP_QUEST_BONUS_OBJECTIVE = 49;
 local EJ_QUEST_POI_MINDIS_SQR = 2500;
 
 local QUEST_POI_FRAME_INSET = 12;		-- roughly half the width/height of a POI icon
@@ -242,6 +244,7 @@ function WorldMapFrame_OnLoad(self)
 	self:RegisterEvent("PLAYER_STARTED_MOVING");
 	self:RegisterEvent("PLAYER_STOPPED_MOVING");
 	self:RegisterEvent("QUESTLINE_UPDATE");
+	self:RegisterEvent("QUEST_LOG_UPDATE");
 
 	self:SetClampRectInsets(0, 0, 0, -60);				-- don't overlap the xp/rep bars
 	self.poiHighlight = nil;
@@ -300,6 +303,15 @@ function WorldMapFrame_OnShow(self)
 		WorldMapFrameAreaPetLevels:SetFontObject("SubZoneTextFont");
 	end
 
+	-- check to show the help plate
+	if ( not GetCVarBitfield("closedInfoFrames", LE_FRAME_TUTORIAL_WORLD_MAP_FRAME) ) then
+		local helpPlate = WorldMapFrame_HelpPlate;
+		if ( helpPlate and not HelpPlate_IsShowing(helpPlate) ) then
+			HelpPlate_Show( helpPlate, WorldMapFrame, WorldMapFrame.MainHelpButton );
+			SetCVarBitfield( "closedInfoFrames", LE_FRAME_TUTORIAL_WORLD_MAP_FRAME, true );
+		end
+	end
+
 	UpdateMicroButtons();
 	if (not WorldMapFrame.toggling) then
 		SetMapToCurrentZone();
@@ -313,6 +325,7 @@ function WorldMapFrame_OnShow(self)
 end
 
 function WorldMapFrame_OnHide(self)
+	HelpPlate_Hide();
 	UpdateMicroButtons();
 	CloseDropDownMenus();
 	PlaySound("igQuestLogClose");
@@ -419,6 +432,8 @@ function WorldMapFrame_OnEvent(self, event, ...)
 		end
 	elseif ( event == "PLAYER_STOPPED_MOVING" ) then
 		WorldMapFrame_AnimAlphaIn(self, true);
+	elseif ( event == "QUEST_LOG_UPDATE" and WorldMapFrame:IsVisible() ) then
+		WorldMap_UpdateQuestBonusObjectives();
 	end
 end
 
@@ -496,6 +511,56 @@ function WorldMapFrame_OnKeyDown(self, key)
 		RunBinding("TOGGLEWORLDMAPSIZE");
 	elseif ( binding == "TOGGLEQUESTLOG" ) then
 		RunBinding("TOGGLEQUESTLOG");
+	end
+end
+
+-----------------------------------------------------------------
+-- Draw quest bonus objectives
+-----------------------------------------------------------------
+function WorldMap_UpdateQuestBonusObjectives()
+	local mapAreaID = GetCurrentMapAreaID();
+	local taskInfo = C_TaskQuest.GetQuestsForPlayerByMapID(mapAreaID);
+	local numTaskPOIs = 0;
+	if(taskInfo ~= nil) then
+		numTaskPOIs = #taskInfo;
+	end
+
+	--Ensure the button pool is big enough for all the world effect POI's
+	if ( NUM_WORLDMAP_TASK_POIS < numTaskPOIs ) then
+		for i=NUM_WORLDMAP_TASK_POIS+1, numTaskPOIs do
+			WorldMap_CreateTaskPOI(i);
+		end
+		NUM_WORLDMAP_TASK_POIS = numTaskPOIs;
+	end
+
+
+	local taskIconCount = 1;
+	for _, info  in next, taskInfo do
+		local textureIndex = MINIMAP_QUEST_BONUS_OBJECTIVE;
+		local x = info.x;
+		local y = info.y;
+		local questid = info.questId;
+			
+		local taskPOIName = "WorldMapFrameTaskPOI"..taskIconCount;
+		local taskPOI = _G[taskPOIName];
+			
+		local x1, x2, y1, y2 = GetWorldEffectTextureCoords(textureIndex);
+		_G[taskPOIName.."Texture"]:SetTexCoord(x1, x2, y1, y2);
+		x = x * WorldMapButton:GetWidth();
+		y = -y * WorldMapButton:GetHeight();
+		taskPOI:SetPoint("CENTER", "WorldMapButton", "TOPLEFT", x, y);
+		taskPOI.name = taskPOIName;
+		taskPOI.questID = questid;
+		taskPOI:Show();
+
+		taskIconCount = taskIconCount + 1;
+	end
+
+	-- Hide unused icons in the pool
+	for i=taskIconCount, NUM_WORLDMAP_TASK_POIS do
+		local taskPOIName = "WorldMapFrameTaskPOI"..i;
+		local taskPOI = _G[taskPOIName];
+		taskPOI:Hide();
 	end
 end
 
@@ -738,6 +803,7 @@ function WorldMapFrame_Update()
 	end
 	
 	WorldMap_DrawWorldEffects();
+	WorldMap_UpdateQuestBonusObjectives();
 
 	-- Setup the overlays
 	local textureCount = 0;
@@ -1051,6 +1117,29 @@ function WorldEffectPOI_OnLeave()
 	WorldMapTooltip:Hide();
 end
 
+function TaskPOI_OnEnter(self)
+	if(self.questID ~= nil) then
+		WorldMapTooltip:SetOwner(self, "ANCHOR_RIGHT");
+		local name = C_TaskQuest.GetQuestTitleByQuestID(self.questID)
+		local objectives = C_TaskQuest.GetQuestObjectiveStrByQuestID(self.questID)
+
+		WorldMapTooltip:SetText(name);
+		for key,value in pairs(objectives) do
+			WorldMapTooltip:AddLine(QUEST_DASH..value, 1, 1, 1, true);
+		end	
+
+		WorldMapTooltip:Show();
+	end
+end
+
+function TaskPOI_OnLeave(self)
+	WorldMapFrame.poiHighlight = nil;
+	WorldMapFrameAreaLabel:SetText(WorldMapFrame.areaName);
+	WorldMapFrameAreaDescription:SetText("");
+	WorldMapTooltip:Hide();
+end
+
+
 function ScenarioPOI_OnEnter(self)
 	if(ScenarioPOITooltips[self.name] ~= nil) then
 		WorldMapTooltip:SetOwner(self, "ANCHOR_RIGHT");
@@ -1125,6 +1214,15 @@ function WorldMap_CreateWorldEffectPOI(index)
 	texture:SetHeight(16);
 	texture:SetPoint("CENTER", 0, 0);
 	texture:SetTexture("Interface\\Minimap\\OBJECTICONS");
+end
+
+function WorldMap_CreateTaskPOI(index)
+	local button = CreateFrame("Button", "WorldMapFrameTaskPOI"..index, WorldMapButton);
+	button:SetScript("OnEnter", TaskPOI_OnEnter);
+	button:SetScript("OnLeave", TaskPOI_OnLeave);
+	
+	button.Texture = button:CreateTexture(button:GetName().."Texture", "BACKGROUND");
+	WorldMap_ResetPOI(button, true, false)
 end
 
 function WorldMap_CreateScenarioPOI(index)
@@ -1844,6 +1942,8 @@ end
 function WorldMap_ToggleSizeUp()
 	QuestMapFrame_Hide();
 	WorldMapFrame.UIElementsFrame.OpenQuestPanelButton:Hide();
+	HelpPlate_Hide();
+	WorldMapFrame.MainHelpButton:Hide();
 	WORLDMAP_SETTINGS.size = WORLDMAP_FULLMAP_SIZE;
 	-- adjust main frame
 	WorldMapFrame:SetParent(nil);
@@ -1894,6 +1994,7 @@ end
 
 function WorldMap_ToggleSizeDown()
 	WorldMapFrame.UIElementsFrame.OpenQuestPanelButton:Show();
+	WorldMapFrame.MainHelpButton:Show();
 	WORLDMAP_SETTINGS.size = WORLDMAP_WINDOWED_SIZE;
 	-- adjust main frame
 	WorldMapFrame:SetParent(UIParent);
@@ -1969,6 +2070,41 @@ function WorldMapQuestPOI_SetTooltip(poiButton, questLogIndex, numObjectives)
 	local title = GetQuestLogTitle(questLogIndex);
 	WorldMapTooltip:SetOwner(poiButton or WorldMapBlobFrame, "ANCHOR_CURSOR_RIGHT", 5, 2);
 	WorldMapTooltip:SetText(title);
+	if ( poiButton and poiButton.style ~= "numeric" ) then
+		WorldMapTooltip:AddLine("- "..GetQuestLogCompletionText(questLogIndex), 1, 1, 1, true);
+	else
+		local text, finished, objectiveType;
+		local numItemDropTooltips = GetNumQuestItemDrops(questLogIndex);
+		if(numItemDropTooltips and numItemDropTooltips > 0) then
+			for i = 1, numItemDropTooltips do
+				text, objectiveType, finished = GetQuestLogItemDrop(i, questLogIndex);
+				if ( text and not finished ) then
+					WorldMapTooltip:AddLine(QUEST_DASH..text, 1, 1, 1, true);
+				end
+			end
+		else
+			local numPOITooltips = WorldMapBlobFrame:GetNumTooltips();
+			numObjectives = numObjectives or GetNumQuestLeaderBoards(questLogIndex);
+			for i = 1, numObjectives do
+				if(numPOITooltips and (numPOITooltips == numObjectives)) then
+					local questPOIIndex = WorldMapBlobFrame:GetTooltipIndex(i);
+					text, objectiveType, finished = GetQuestPOILeaderBoard(questPOIIndex, questLogIndex);
+				else
+					text, objectiveType, finished = GetQuestLogLeaderBoard(i, questLogIndex);
+				end
+				if ( text and not finished ) then
+					WorldMapTooltip:AddLine(QUEST_DASH..text, 1, 1, 1, true);
+				end
+			end		
+		end
+	end
+	WorldMapTooltip:Show();
+end
+
+function WorldMapQuestPOI_AppendTooltip(poiButton, questLogIndex)
+	local title = GetQuestLogTitle(questLogIndex);
+	WorldMapTooltip:AddLine(" ");
+	WorldMapTooltip:AddLine(title);
 	if ( poiButton and poiButton.style ~= "numeric" ) then
 		WorldMapTooltip:AddLine("- "..GetQuestLogCompletionText(questLogIndex), 1, 1, 1, true);
 	else
@@ -2331,8 +2467,23 @@ function WorldMapPOIButton_Init(self)
 	self:SetScript("OnLeave", WorldMapPOIButton_OnLeave);
 end
 
+BLOB_OVERLAP_DELTA = math.pow(0.005, 2);
+
 function WorldMapPOIButton_OnEnter(self)
 	WorldMapQuestPOI_SetTooltip(self, GetQuestLogIndexByID(self.questID));
+
+	local _, posX, posY = QuestPOIGetIconInfo(self.questID);
+	for _, poiType in pairs(WorldMapPOIFrame.poiTable) do
+		for _, poiButton in pairs(poiType) do
+			if ( poiButton ~= self and poiButton.used ) then
+				local _, otherPosX, otherPosY = QuestPOIGetIconInfo(poiButton.questID);
+
+				if ((math.pow(posX - otherPosX, 2) + math.pow(posY - otherPosY, 2)) < BLOB_OVERLAP_DELTA) then
+					WorldMapQuestPOI_AppendTooltip(poiButton, GetQuestLogIndexByID(poiButton.questID));
+				end
+			end
+		end
+	end
 end
 
 function WorldMapPOIButton_OnLeave(self)
@@ -2700,5 +2851,29 @@ function WorldMapNavBar_Update()
 			buttonData.listFunc = WorldMapNavBar_GetSibling;
 		end
 		NavBar_AddButton(WorldMapFrame.NavBar, buttonData);
+	end
+end
+
+-- *****************************************************************************************************
+-- ***** HELP PLATE STUFF
+-- *****************************************************************************************************
+
+WorldMapFrame_HelpPlate = {
+	FramePos = { x = 4,	y = -40 },
+	FrameSize = { width = 985, height = 500	},
+	[1] = { ButtonPos = { x = 350,	y = -180 }, HighLightBox = { x = 0, y = -30, width = 695, height = 470 },		ToolTipDir = "DOWN",		ToolTipText = WORLD_MAP_TUTORIAL1 },
+	[2] = { ButtonPos = { x = 810,	y = -180 }, HighLightBox = { x = 700, y = -30, width = 285, height = 470 },	ToolTipDir = "DOWN",	ToolTipText = WORLD_MAP_TUTORIAL2 },
+	[3] = { ButtonPos = { x = 810,	y = 16 }, HighLightBox = { x = 700, y = 16, width = 285, height = 44 },	ToolTipDir = "DOWN",	ToolTipText = WORLD_MAP_TUTORIAL3 },
+	[4] = { ButtonPos = { x = 350,	y = 16 }, HighLightBox = { x = 50, y = 16, width = 645, height = 44 },	ToolTipDir = "DOWN",	ToolTipText = WORLD_MAP_TUTORIAL4 },
+}
+
+function WorldMapFrame_ToggleTutorial()
+	local helpPlate = WorldMapFrame_HelpPlate;
+		
+	if ( helpPlate and not HelpPlate_IsShowing(helpPlate) and WorldFrame:IsShown()) then
+		HelpPlate_Show( helpPlate, WorldMapFrame, WorldMapFrame.MainHelpButton, true );
+		SetCVarBitfield( "closedInfoFrames", LE_FRAME_TUTORIAL_WORLD_MAP_FRAME, true );
+	else
+		HelpPlate_Hide(true);
 	end
 end

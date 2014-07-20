@@ -11,7 +11,7 @@ VISIBLE_CONTAINER_SPACING = 3;
 CONTAINER_OFFSET_Y = 70;
 CONTAINER_OFFSET_X = 0;
 CONTAINER_SCALE = 0.75;
-BACKPACK_HEIGHT = 252;
+BACKPACK_HEIGHT = 251;
 
 function ContainerFrame_OnLoad(self)
 	self:RegisterEvent("BAG_OPEN");
@@ -328,11 +328,11 @@ function ContainerFrame_Update(frame)
 	--Update Searchbox and sort button
 	if ( id == 0 ) then
 		BagItemSearchBox:SetParent(frame);
-		BagItemSearchBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 54, -36);
+		BagItemSearchBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 54, -35);
 		BagItemSearchBox.anchorBag = frame;
 		BagItemSearchBox:Show();
 		BagItemAutoSortButton:SetParent(frame);
-		BagItemAutoSortButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -30);
+		BagItemAutoSortButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -32);
 		BagItemAutoSortButton:Show();
 	elseif ( BagItemSearchBox.anchorBag == frame ) then
 		BagItemSearchBox:ClearAllPoints();
@@ -398,14 +398,14 @@ function ContainerFrame_Update(frame)
 		
 		itemButton.JunkIcon:Hide();
 		if (quality) then
-			if (quality > LE_ITEM_QUALITY_COMMON and BAG_ITEM_QUALITY_COLORS[quality]) then
+			if (quality >= LE_ITEM_QUALITY_COMMON and BAG_ITEM_QUALITY_COLORS[quality]) then
 				itemButton.IconBorder:Show();
 				itemButton.IconBorder:SetVertexColor(BAG_ITEM_QUALITY_COLORS[quality].r, BAG_ITEM_QUALITY_COLORS[quality].g, BAG_ITEM_QUALITY_COLORS[quality].b);
 			else
 				itemButton.IconBorder:Hide();
 			end
 
-			if (quality == LE_ITEM_QUALITY_POOR and not noValue) then
+			if (quality == LE_ITEM_QUALITY_POOR and not noValue and MerchantFrame:IsShown()) then
 				itemButton.JunkIcon:Show();
 			end
 		else
@@ -430,6 +430,15 @@ function ContainerFrame_Update(frame)
 			itemButton.searchOverlay:Show();
 		else
 			itemButton.searchOverlay:Hide();
+		end
+	end
+end
+
+function ContainerFrame_UpdateAll()
+	for i = 1, NUM_CONTAINER_FRAMES, 1 do
+		local frame = _G["ContainerFrame"..i];
+		if (frame:IsShown()) then
+			ContainerFrame_Update(frame);
 		end
 	end
 end
@@ -653,7 +662,7 @@ function ContainerFrame_GenerateFrame(frame, size, id)
 			if ( i == 1 ) then
 				-- Anchor the first item differently if its the backpack frame
 				if ( id == 0 ) then
-					itemButton:SetPoint("BOTTOMRIGHT", name, "TOPRIGHT", -12, -222);
+					itemButton:SetPoint("BOTTOMRIGHT", name, "TOPRIGHT", -12, -221);
 				else
 					itemButton:SetPoint("BOTTOMRIGHT", name, "BOTTOMRIGHT", -12, 9);
 				end
@@ -1024,7 +1033,7 @@ function OpenAllBags(frame)
 	end
 end
 
-function CloseAllBags(frame)
+function CloseAllBags(frame)	
 	if( frame ) then
 		if ( frame:GetName() == FRAME_THAT_OPENED_BAGS) then
 			FRAME_THAT_OPENED_BAGS = nil;
@@ -1107,19 +1116,18 @@ function ContainerFrameFilterDropDown_Initialize(self, level)
 	info.isTitle = nil;
 	info.notCheckable = nil;
 	info.isNotRadio = true;
-	info.keepShownOnClick = true;
 	info.disabled = nil;
 
 	info.text = BAG_FILTER_IGNORE;
 	info.func = function(_, _, _, value)
 		if (id == -1) then
-			SetBankAutosortDisabled(value);
+			SetBankAutosortDisabled(not value);
 		elseif (id == 0) then
-			SetBackpackAutosortDisabled(value);
+			SetBackpackAutosortDisabled(not value);
 		elseif (id > NUM_BAG_SLOTS) then
-			SetBankBagSlotAutosortDisabled(id, value);
+			SetBankBagSlotAutosortDisabled(id, not value);
 		else
-			SetBagSlotFlag(id, LE_BAG_FILTER_FLAG_IGNORE_CLEANUP, value);
+			SetBagSlotFlag(id, LE_BAG_FILTER_FLAG_IGNORE_CLEANUP, not value);
 		end
 	end;
 	if (id == -1) then

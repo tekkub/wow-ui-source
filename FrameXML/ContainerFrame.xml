@@ -191,7 +191,7 @@
 				<Anchors>
 					<Anchor point="TOPRIGHT" relativeTo="$parent" relativePoint="TOPRIGHT">
 						<Offset>
-							<AbsDimension x="-2" y="-228"/>
+							<AbsDimension x="-2" y="-227"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -253,10 +253,10 @@
 				</Anchors>
 				<Layers>
 					<Layer level="OVERLAY">
-						<Texture parentKey="Highlight" atlas="bags-roundhighlight" hidden="true">
+						<Texture parentKey="Highlight" atlas="bags-roundhighlight" alphaMode="ADD" hidden="true" alpha="0.8">
 							<Size x="36" y="36"/>
 							<Anchors>
-								<Anchor point="CENTER" x="-2" y="2"/>
+								<Anchor point="CENTER" x="-3" y="3"/>
 							</Anchors>
 						</Texture>
 					</Layer>
@@ -270,7 +270,11 @@
 							if (GetBindingKey("TOGGLEBACKPACK")) then
 								GameTooltip:AppendText(" "..NORMAL_FONT_COLOR_CODE.."("..GetBindingKey("TOGGLEBACKPACK")..")"..FONT_COLOR_CODE_CLOSE)
 							end
-						elseif ( GameTooltip:SetInventoryItem("player", ContainerIDToInventoryID(self:GetID())) ) then
+						else
+							local link = GetInventoryItemLink("player", ContainerIDToInventoryID(self:GetID()));
+							local name, _, quality = GetItemInfo(link);
+							local r, g, b = GetItemQualityColor(quality);
+							GameTooltip:SetText(name, r, g, b);
 							local binding = GetBindingKey("TOGGLEBAG"..(4 - self:GetID() + 1));
 							if ( binding ) then
 								GameTooltip:AppendText(" "..NORMAL_FONT_COLOR_CODE.."("..binding..")"..FONT_COLOR_CODE_CLOSE);
@@ -303,30 +307,6 @@
 						ToggleBag(self:GetParent():GetID());
 					</OnClick>
 				</Scripts>
-			</Button>
-			<Button parentKey="FiltersButton">
-				<Size x="18" y="18"/>
-				<Anchors>
-					<Anchor point="CENTER" relativeTo="$parentPortraitButton" relativePoint="BOTTOMRIGHT" x="-7" y="8"/>
-				</Anchors>
-				<Scripts>
-					<OnShow>
-						self:SetFrameLevel(self:GetParent():GetFrameLevel()+2);
-					</OnShow>
-					<OnClick>
-						local parent = self:GetParent();
-						PlaySound("igMainMenuOptionCheckBoxOn");
-						ToggleDropDownMenu(1, nil, parent.FilterDropDown, self, 0, 0);
-					</OnClick>
-					<OnEnter>
-						GameTooltip:SetOwner(self, "ANCHOR_LEFT", 4, -4);
-						GameTooltip:AddLine(BAG_SETTINGS_TOOLTIP);
-						GameTooltip:Show();
-					</OnEnter>
-					<OnLeave function="GameTooltip_Hide"/>
-				</Scripts>
-				<NormalTexture atlas="bags-icon-gear"/>
-				<HighlightTexture atlas="bags-icon-gear" desaturated="TRUE" alphaMode="ADD" alpha="0.3" />
 			</Button>
 			<Frame name="$parentFilterDropDown" parentKey="FilterDropDown" inherits="UIDropDownMenuTemplate">
 				<Scripts>
@@ -384,17 +364,17 @@
 	<Frame name="ContainerFrame13" inherits="ContainerFrameTemplate" parent="UIParent" id="100" hidden="true"/>
 
 	<EditBox name="BagItemSearchBox" inherits="BagSearchBoxTemplate" parent="ContainerFrame1" letters="15" hidden="true">
-		<Size x="98" y="18"/>
+		<Size x="100" y="18"/>
 	</EditBox>
 
 	<Button name="BagItemAutoSortButton" parent="ContainerFrame1" hidden="true">
-		<Size x="30" y="30"/>
+		<Size x="28" y="26"/>
 		<NormalTexture atlas="bags-button-autosort-up"/>
 		<PushedTexture atlas="bags-button-autosort-down"/>
 		<HighlightTexture file="Interface\Buttons\ButtonHilight-Square" alphaMode="ADD">
-			<Size x="26" y="26"/>
+			<Size x="26" y="24"/>
 			<Anchors>
-				<Anchor point="CENTER" x="0" y="2"/>
+				<Anchor point="CENTER" x="0" y="1"/>
 			</Anchors>
 		</HighlightTexture>
 		<Scripts>

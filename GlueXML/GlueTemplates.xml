@@ -93,7 +93,7 @@
 			<AbsDimension x="16" y="0"/>
 		</Size>
 		<Frames>
-			<Button name="$parentScrollUpButton" inherits="GlueScrollUpButtonTemplate">
+			<Button name="$parentScrollUpButton" parentKey="ScrollUpButton" inherits="GlueScrollUpButtonTemplate">
 				<Anchors>
 					<Anchor point="BOTTOM" relativePoint="TOP"/>
 				</Anchors>
@@ -105,7 +105,7 @@
 					</OnClick>
 				</Scripts>
 			</Button>
-			<Button name="$parentScrollDownButton" inherits="GlueScrollDownButtonTemplate">
+			<Button name="$parentScrollDownButton" parentKey="ScrollDownButton" inherits="GlueScrollDownButtonTemplate">
 				<Anchors>
 					<Anchor point="TOP" relativePoint="BOTTOM"/>
 				</Anchors>
@@ -239,5 +239,22 @@
 				</Texture>
 			</Layer>
 		</Layers>
+	</Frame>
+	<Frame name="GlueModalFrameTemplate" virtual="true">
+		<Frames>
+			<Frame parentKey="ModalBackground" useParentLevel="true" enableMouse="true">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="GlueParent"/>
+					<Anchor point="BOTTOMRIGHT" relativeTo="GlueParent"/>
+				</Anchors>
+				<Layers>
+					<Layer level="BACKGROUND" textureSubLevel="-10">
+						<Texture setAllPoints="true">
+							<Color a="0.75" r="0" g="0" b="0"/>
+						</Texture>
+					</Layer>
+				</Layers>
+			</Frame>
+		</Frames>
 	</Frame>
 </Ui>

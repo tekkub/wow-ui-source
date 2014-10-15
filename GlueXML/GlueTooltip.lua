@@ -27,7 +27,7 @@ function GlueTooltip_SetOwner(self, owner, xOffset, yOffset, myPoint, ownerPoint
 	self:Show();
 end
 
-function GlueTooltip_GetOwner()
+function GlueTooltip_GetOwner(self)
 	return self.owner;
 end
 
@@ -83,7 +83,7 @@ function GlueTooltip_AddLine(self, text, r, g, b, a, wrap)
 	freeLine:SetWidth(0);
 
 	local wrapWidth = 230;
-	if (wrap and freeLine:GetWidth() > wrapWidth and self:GetWidth() < wrapWidth+GLUETOOLTIP_HPADDING) then
+	if (wrap and freeLine:GetWidth() > wrapWidth) then
 	
 		-- Trim the right edge so that there isn't extra space after wrapping
 		freeLine:SetWidth(wrapWidth);

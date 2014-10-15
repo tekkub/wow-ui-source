@@ -1,17 +1,20 @@
 FADE_IN_TIME = 2;
 DEFAULT_TOOLTIP_COLOR = {0.8, 0.8, 0.8, 0.09, 0.09, 0.09};
 MAX_PIN_LENGTH = 10;
+IS_LOGGING_IN = false;
 
 function AccountLogin_OnLoad(self)
 	TOSFrame.noticeType = "EULA";
 
-	self:RegisterEvent("SHOW_SERVER_ALERT");
 	self:RegisterEvent("SHOW_SURVEY_NOTIFICATION");
 	self:RegisterEvent("CLIENT_ACCOUNT_MISMATCH");
 	self:RegisterEvent("CLIENT_TRIAL");
 	self:RegisterEvent("SCANDLL_ERROR");
 	self:RegisterEvent("SCANDLL_FINISHED");
 	self:RegisterEvent("LAUNCHER_LOGIN_STATUS_CHANGED");
+	self:RegisterEvent("LOGIN_STARTED");
+	self:RegisterEvent("LOGIN_STOPPED");
+	self:RegisterEvent("SCREEN_FIRST_DISPLAYED");
 
 	local versionType, buildType, version, internalVersion, date = GetBuildInfo();
 	AccountLoginVersion:SetFormattedText(VERSION_TEMPLATE, versionType, version, internalVersion, buildType, date);
@@ -36,15 +39,17 @@ function AccountLogin_OnShow(self)
 
 	-- special code for BlizzCon
 	if (IsBlizzCon()) then
-		local account = GetCVar("accountName");
-		DefaultServerLogin(account, "blizzcon11");
+		AccountLoginPasswordEdit:SetText(GetCVar("password"));
+		DefaultServerLogin(GetCVar("accountName"), AccountLoginPasswordEdit);
 		AccountLoginUI:Hide();
 		return;
 	end
-
+	
+	local displayedExpansionLevel = GetClientDisplayExpansionLevel();
+	
 	self:SetSequence(0);
-	PlayGlueMusic(EXPANSION_GLUE_MUSIC[GetClientDisplayExpansionLevel()]);
-	PlayGlueAmbience(GlueAmbienceTracks["DARKPORTAL"], 4.0);
+	PlayGlueMusic(EXPANSION_GLUE_MUSIC[displayedExpansionLevel]);
+	PlayGlueAmbience(EXPANSION_GLUE_AMBIENCE[displayedExpansionLevel], 4.0);
 
 	-- Try to show the EULA or the TOS
 	AccountLogin_ShowUserAgreements();
@@ -102,11 +107,17 @@ end
 
 function AccountLogin_OnKeyDown(key)
 	if ( key == "ESCAPE" ) then
-		if ( ConnectionHelpFrame:IsShown() ) then
+		if ( IsLauncherLogin() and GlueMenuFrame:IsShown() ) then
+			GlueMenuFrame_Hide();
+		elseif ( ConnectionHelpFrame:IsShown() ) then
 			ConnectionHelpFrame:Hide();
 			AccountLoginUI:Show();
 		elseif ( SurveyNotificationFrame:IsShown() ) then
 			-- do nothing
+		elseif ( TOSFrame:IsShown() or ConnectionHelpFrame:IsShown() ) then
+			return;
+		elseif ( IsLauncherLogin() and not GlueMenuFrame:IsShown() ) then
+			GlueMenuFrame_Show();
 		else
 			AccountLogin_Exit();
 		end
@@ -116,19 +127,20 @@ function AccountLogin_OnKeyDown(key)
 		elseif ( TOSFrame:IsShown() or ConnectionHelpFrame:IsShown() ) then
 			return;
 		elseif ( SurveyNotificationFrame:IsShown() ) then
-			AccountLogin_SurveyNotificationDone(1);
+			AccountLogin_SurveyNotificationDone(true);
 		end
-		AccountLogin_Login();
+		if ( IsLauncherLogin() ) then
+			AttemptFastLogin();
+		else
+			AccountLogin_Login();
+		end
 	elseif ( key == "PRINTSCREEN" ) then
 		Screenshot();
 	end
 end
 
 function AccountLogin_OnEvent(event, arg1, arg2, arg3)
-	if ( event == "SHOW_SERVER_ALERT" ) then
-		ServerAlertText:SetText(arg1);
-		ServerAlertFrame:Show();
-	elseif ( event == "SHOW_SURVEY_NOTIFICATION" ) then
+	if ( event == "SHOW_SURVEY_NOTIFICATION" ) then
 		AccountLogin_ShowSurveyNotification();
 	elseif ( event == "CLIENT_ACCOUNT_MISMATCH" ) then
 		local accountExpansionLevel = arg1;
@@ -146,20 +158,32 @@ function AccountLogin_OnEvent(event, arg1, arg2, arg3)
 		GlueDialog:Hide();
 		ScanDLLContinueAnyway();
 		AccountLoginUI:Show();
+		AccountLogin_CheckAutoLogin();
 	elseif ( event == "SCANDLL_FINISHED" ) then
-		if ( arg1 == "OK" ) then
+		local hackType, hackName, blocking = arg1, arg2, arg3;
+		if ( hackType == "OK" ) then
 			GlueDialog:Hide();
 			AccountLoginUI:Show();
+			AccountLogin_CheckAutoLogin();
+		elseif ( not hackType ) then
+			--We failed, but we don't know why.
+			GlueDialog:Hide();
+			AccountLoginUI:Show();
+			if ( not blocking ) then
+				AccountLogin_CheckAutoLogin();
+			else
+				CancelLauncherLogin();
+			end
 		else
-			AccountLogin.hackURL = _G["SCANDLL_URL_"..arg1];
-			AccountLogin.hackName = arg2;
-			AccountLogin.hackType = arg1;
-			local formatString = _G["SCANDLL_MESSAGE_"..arg1];
-			if ( arg3 == 1 ) then
+			AccountLogin.hackURL = _G["SCANDLL_URL_"..hackType];
+			AccountLogin.hackName = hackName;
+			AccountLogin.hackType = hackType;
+			local formatString = _G["SCANDLL_MESSAGE_"..hackType];
+			if ( blocking ) then
 				formatString = _G["SCANDLL_MESSAGE_HACKNOCONTINUE"];
 			end
 			local msg = format(formatString, AccountLogin.hackName, AccountLogin.hackURL);
-			if ( arg3 == 1 ) then
+			if ( blocking ) then
 				GlueDialog_Show("SCANDLL_HACKFOUND_NOCONTINUE", msg);
 			else
 				GlueDialog_Show("SCANDLL_HACKFOUND", msg);
@@ -168,12 +192,55 @@ function AccountLogin_OnEvent(event, arg1, arg2, arg3)
 		end
 	elseif ( event == "LAUNCHER_LOGIN_STATUS_CHANGED" ) then
 		AccountLogin_UpdateLoginType();
+	elseif ( event == "LOGIN_STARTED" ) then
+		IS_LOGGING_IN = true;
+		AccountLogin_UpdateLoginType();
+	elseif ( event == "LOGIN_STOPPED" ) then
+		IS_LOGGING_IN = false;
+		AccountLogin_UpdateLoginType();
+	elseif ( event == "SCREEN_FIRST_DISPLAYED" ) then
+		if ( AccountLogin_CanAutoLogin() ) then
+			AccountLogin_StartAutoLoginTimer()
+		end
+	end
+end
+
+--Delay login by 1 second to make sure Copyright/Version have time to display
+local AUTO_LOGIN_TIMER = 1 + LOGIN_FADE_IN;
+local AUTO_LOGIN_TIMER_STARTED = false;
+function AccountLogin_StartAutoLoginTimer()
+	AccountLogin:SetScript("OnUpdate", AccountLogin_OnUpdate);
+end
+
+function AccountLogin_CanAutoLogin()
+	return CanLogIn() and not SHOW_KOREAN_RATINGS and IsLauncherLogin() and not IsLauncherLoginAutoAttempted();
+end
+function AccountLogin_CheckAutoLogin()
+	if ( AccountLogin_CanAutoLogin() ) then
+		if ( AUTO_LOGIN_TIMER <= 0 ) then
+			SetLauncherLoginAutoAttempted();
+			AttemptFastLogin();
+		elseif ( not AUTO_LOGIN_TIMER_STARTED ) then
+			AUTO_LOGIN_TIMER_STARTED = true;
+			GlueDialog_Show("CANCEL", LOGIN_STATE_CONNECTING);
+			if ( WasScreenFirstDisplayed() ) then
+				AccountLogin_StartAutoLoginTimer();
+			end
+		end
+	end
+end
+
+function AccountLogin_OnUpdate(self, elapsed)
+	AUTO_LOGIN_TIMER = AUTO_LOGIN_TIMER - elapsed;
+	if ( AUTO_LOGIN_TIMER <= 0 ) then
+		AccountLogin_CheckAutoLogin();
+		self:SetScript("OnUpdate", nil);
 	end
 end
 
 function AccountLogin_Login()
 	PlaySound("gsLogin");
-	DefaultServerLogin(AccountLoginAccountEdit:GetText(), AccountLoginPasswordEdit:GetText());
+	DefaultServerLogin(AccountLoginAccountEdit:GetText(), AccountLoginPasswordEdit);
 	AccountLoginPasswordEdit:SetText("");
 
 	if ( AccountLoginSaveAccountName:GetChecked() ) then
@@ -188,6 +255,7 @@ function AccountLogin_TOS()
 	if ( not GlueDialog:IsShown() ) then
 		PlaySound("gsLoginNewAccount");
 		AccountLoginUI:Hide();
+		AccountLogin_HideAllUserAgreements();
 		TOSFrame:Show();
 		TOSScrollFrameScrollBar:SetValue(0);		
 		TOSScrollFrame:Show();
@@ -211,7 +279,7 @@ function AccountLogin_Credits()
 	CreditsFrame.creditsType = GetClientDisplayExpansionLevel() + 1;	--Expansion levels are off by one from credits indices.
 	CreditsFrame.maxCreditsType = GetClientDisplayExpansionLevel() + 1;
 	PlaySound("gsTitleCredits");
-	SetGlueScreen("credits");
+	CreditsFrame_Show(CreditsFrame, GetCurrentGlueScreenName());
 	CinematicsFrame:Hide();
 end
 
@@ -221,8 +289,9 @@ function AccountLogin_Cinematics()
 		if ( CinematicsFrame.numMovies > 1 ) then
 			CinematicsFrame:Show();
 		else
+			--Probably never called anymore, but...
 			MovieFrame.version = 1;
-			SetGlueScreen("movie");
+			MovieFrame_Show(MovieFrame, GetCurrentGlueScreenName());
 		end
 	end
 end
@@ -254,16 +323,19 @@ function AccountLogin_SurveyNotificationDone(accepted)
 	AccountLoginUI:Show();
 end
 
-function AccountLogin_ShowUserAgreements()
+function AccountLogin_HideAllUserAgreements()
 	TOSScrollFrame:Hide();
 	EULAScrollFrame:Hide();
 	TerminationScrollFrame:Hide();
 	ScanningScrollFrame:Hide();
-	ContestScrollFrame:Hide();
 	TOSText:Hide();
 	EULAText:Hide();
 	TerminationText:Hide();
 	ScanningText:Hide();
+end
+
+function AccountLogin_ShowUserAgreements()
+	AccountLogin_HideAllUserAgreements();
 	KoreanRatings:Hide();
 	if ( not EULAAccepted() ) then
 		if ( ShowEULANotice() ) then
@@ -313,18 +385,6 @@ function AccountLogin_ShowUserAgreements()
 		ScanningScrollFrame:Show();
 		ScanningText:Show();
 		TOSFrame:Show();
-	elseif ( not ContestAccepted() and SHOW_CONTEST_AGREEMENT ) then
-		if ( ShowContestNotice() ) then
-			TOSNotice:SetText(CONTEST_NOTICE);
-			TOSNotice:Show();
-		end
-		AccountLoginUI:Hide();
-		TOSFrame.noticeType = "CONTEST";
-		TOSFrameTitle:SetText(CONTEST_FRAME_TITLE);
-		TOSFrameHeader:SetWidth(TOSFrameTitle:GetWidth());
-		ContestScrollFrame:Show();
-		ContestText:Show();
-		TOSFrame:Show();
 	elseif (SHOW_KOREAN_RATINGS) then
 		AccountLoginUI:Hide();
 		TOSFrame:Hide();
@@ -360,25 +420,60 @@ function AccountLogin_UpdateAcceptButton(scrollFrame, isAcceptedFunc, noticeType
 			TOSAccept:Disable();
 		end
 	end
-end																
+end
 
 function AccountLogin_UpdateLoginType()
 	if ( IsLauncherLogin() ) then
-		AccountLoginNormalLoginFrame:Hide();
-		AccountLoginLauncherLoginFrame:Show();
-
-		if ( GetSavedAccountListSSO() ~= "" ) then
-			AccountLoginLauncherChangeAccountButton:Show();
-			AccountLoginLauncherPlayButton:SetPoint("BOTTOM", AccountLoginLauncherChangeAccountButton, "TOP", 0, 10);
-			AccountLoginLauncherLogoutButton:SetPoint("BOTTOM", AccountLoginLauncherLoginFrame, "BOTTOM", 0, 115);
+		if ( IS_LOGGING_IN or (AUTO_LOGIN_TIMER >= 0 and not IsLauncherLoginAutoAttempted()) ) then
+			AccountLoginNormalLoginFrame:Hide();
+			AccountLoginLauncherLoginFrame:Hide();
+			AccountLoginTOSButton:Hide();
+			AccountLoginCreditsButton:Hide();
+			AccountLoginCinematicsButton:Hide();
+			AccountLoginCreateAccountButton:Hide();
+			AccountLoginManageAccountButton:Hide();
+			AccountLoginCommunityButton:Hide();
+			OptionsButton:Hide();
+			GlueMenuButton:Hide();
+			ServerAlert_Disable(ServerAlertFrame);
 		else
-			AccountLoginLauncherChangeAccountButton:Hide();
-			AccountLoginLauncherPlayButton:SetPoint("BOTTOM", AccountLoginLauncherLogoutButton, "TOP", 0, 10);
-			AccountLoginLauncherLogoutButton:SetPoint("BOTTOM", AccountLoginLauncherLoginFrame, "BOTTOM", 0, 170);
+			AccountLoginNormalLoginFrame:Hide();
+			AccountLoginLauncherLoginFrame:Show();
+
+			if ( GetSavedAccountListSSO() ~= "" ) then
+				AccountLoginLauncherChangeAccountButton:Show();
+				AccountLoginLauncherPlayButton:SetPoint("BOTTOM", AccountLoginLauncherChangeAccountButton, "TOP", 0, 10);
+				AccountLoginLauncherLogoutButton:SetPoint("BOTTOM", AccountLoginLauncherLoginFrame, "BOTTOM", 0, 115);
+			else
+				AccountLoginLauncherChangeAccountButton:Hide();
+				AccountLoginLauncherPlayButton:SetPoint("BOTTOM", AccountLoginLauncherLogoutButton, "TOP", 0, 10);
+				AccountLoginLauncherLogoutButton:SetPoint("BOTTOM", AccountLoginLauncherLoginFrame, "BOTTOM", 0, 170);
+			end
+
+			AccountLoginTOSButton:Hide();
+			AccountLoginCreditsButton:Hide();
+			AccountLoginCinematicsButton:Hide();
+			AccountLoginCreateAccountButton:Hide();
+			AccountLoginManageAccountButton:Hide();
+			AccountLoginCommunityButton:Hide();
+			OptionsButton:Hide();
+			GlueMenuButton:Show();
+			ServerAlert_Disable(ServerAlertFrame);
 		end
 	else
 		AccountLoginNormalLoginFrame:Show();
 		AccountLoginLauncherLoginFrame:Hide();
+
+		AccountLoginTOSButton:Show();
+		AccountLoginCreditsButton:Show();
+		AccountLoginCinematicsButton:Show();
+		AccountLoginCreateAccountButton:Show();
+		AccountLoginManageAccountButton:Show();
+		AccountLoginCommunityButton:Show();
+		OptionsButton:Show();
+		GlueMenuButton:Hide();
+
+		ServerAlert_Enable(ServerAlertFrame);
 	end
 end
 
@@ -834,8 +929,8 @@ end
 function CinematicsButton_Update(self)
 	local movieId = self:GetID();
 	if (CinematicsFrame_IsMovieListLocal(movieId)) then
-		self:GetNormalTexture():SetDesaturated(nil);
-		self:GetPushedTexture():SetDesaturated(nil);
+		self:GetNormalTexture():SetDesaturated(false);
+		self:GetPushedTexture():SetDesaturated(false);
 		self.PlayButton:Show();
 		self.DownloadIcon:Hide();
 		self.StreamingIcon:Hide();
@@ -856,7 +951,7 @@ function CinematicsButton_Update(self)
 		self.isLocal = false;
 		self.isPlayable = isPlayable;
 		
-		if (inProgress or (downloaded/total) > 0.1) then
+		if (inProgress or (total > 0 and ((downloaded/total) > 0.1))) then
 			self.StatusBar:SetMinMaxValues(0, total);
 			self.StatusBar:SetValue(downloaded);
 			self.StatusBar:Show();
@@ -865,16 +960,16 @@ function CinematicsButton_Update(self)
 		end
 
 		if (isPlayable and inProgress) then
-			self:GetNormalTexture():SetDesaturated(nil);
-			self:GetPushedTexture():SetDesaturated(nil);
+			self:GetNormalTexture():SetDesaturated(false);
+			self:GetPushedTexture():SetDesaturated(false);
 			self.PlayButton:Show();
 			self.DownloadIcon:Hide();
 			self.StreamingIcon:Hide();
 			self.StatusBar:SetStatusBarColor(0, 0.8, 0);
 			self:SetScript("OnUpdate", CinematicsButton_Update);
 		elseif (inProgress) then
-			self:GetNormalTexture():SetDesaturated(1);
-			self:GetPushedTexture():SetDesaturated(1);
+			self:GetNormalTexture():SetDesaturated(true);
+			self:GetPushedTexture():SetDesaturated(true);
 			self.PlayButton:Hide();
 			self.DownloadIcon:Hide();
 			self.StreamingIcon:Show();
@@ -882,8 +977,8 @@ function CinematicsButton_Update(self)
 			self.StatusBar:SetStatusBarColor(0, 0.8, 0);
 			self:SetScript("OnUpdate", CinematicsButton_Update);
 		else
-			self:GetNormalTexture():SetDesaturated(1);
-			self:GetPushedTexture():SetDesaturated(1);
+			self:GetNormalTexture():SetDesaturated(true);
+			self:GetPushedTexture():SetDesaturated(true);
 			self.PlayButton:Hide();
 			self.DownloadIcon:Show();
 			self.StreamingIcon:Hide();
@@ -923,7 +1018,7 @@ function CinematicsButton_OnClick(self)
 		PlaySound("gsTitleOptionOK");
 		MovieFrame.version = self:GetID();
 		MovieFrame.showError = true;
-		SetGlueScreen("movie");
+		MovieFrame_Show(MovieFrame, GetCurrentGlueScreenName());
 	else
 		local inProgress, downloaded, total = CinematicsFrame_GetMovieDownloadProgress(self:GetID());
 		if (inProgress) then
@@ -969,25 +1064,85 @@ function CinematicsButton_OnEnter(self)
 	end
 end
 
-KOREAN_RATINGS_TIMER = 3; -- seconds it needs to display
+local KOREAN_RATINGS_AUTO_CLOSE_TIMER; -- seconds until automatically closing
+function KoreanRatings_OnLoad(self)
+	if ( WasScreenFirstDisplayed() ) then
+		KoreanRatings_ScreenDisplayed(self);
+	else
+		self:RegisterEvent("SCREEN_FIRST_DISPLAYED");
+	end
+end
+
+function KoreanRatings_OnEvent(self, event, ...)
+	if ( event == "SCREEN_FIRST_DISPLAYED" ) then
+		KoreanRatings_ScreenDisplayed(self);
+		self:UnregisterEvent("SCREEN_FIRST_DISPLAYED");
+	end
+end
+
+function KoreanRatings_ScreenDisplayed(self)
+	self:SetScript("OnUpdate", KoreanRatings_OnUpdate);
+end
+
 function KoreanRatings_OnShow(self)
 	AccountLoginUI:Hide();
-	KOREAN_RATINGS_TIMER = 3 + LOGIN_FADE_IN;
 	self.locked = true;
-	KoreanRatingsOK:Disable();
+	KOREAN_RATINGS_AUTO_CLOSE_TIMER = 3;
 	KoreanRatingsText:SetTextHeight(10); -- this is just dumb ... sort out this bug later.
 	KoreanRatingsText:SetTextHeight(50);
 end
+
 function KoreanRatings_OnUpdate(self, elapsed)
-	KOREAN_RATINGS_TIMER = KOREAN_RATINGS_TIMER - elapsed;
-	if ( KOREAN_RATINGS_TIMER <= 0 ) then
-		self.locked = false;
-			KoreanRatingsOK:Enable();
+	KOREAN_RATINGS_AUTO_CLOSE_TIMER = KOREAN_RATINGS_AUTO_CLOSE_TIMER - elapsed;
+	if ( KOREAN_RATINGS_AUTO_CLOSE_TIMER <= 0 ) then
+		KoreanRatings_Close(self);
 	end	
 end
-function KoreanRatings_UserInput(self)
-	if ( not self.locked ) then
-		SHOW_KOREAN_RATINGS = false;
-		AccountLogin_ShowUserAgreements();
+
+function KoreanRatings_Close(self)
+	SHOW_KOREAN_RATINGS = false;
+	AccountLogin_CheckAutoLogin();
+	AccountLogin_ShowUserAgreements();
+end
+
+function CheckSystemRequirements( previousCheck )
+	if ( not previousCheck  ) then
+		if ( not IsCPUSupported() ) then
+			GlueDialog_Show("SYSTEM_INCOMPATIBLE_SSE");
+			return;
+		end
+		previousCheck = nil;
+	end
+	
+	if ( not previousCheck or previousCheck == "SSE" ) then
+		if ( not IsShaderModelSupported() ) then
+			GlueDialog_Show("FIXEDFUNCTION_UNSUPPORTED");
+			return;
+		end
+		previousCheck = nil;
+	end
+	
+	if ( not previousCheck or previousCheck == "SHADERMODEL" ) then
+		if ( VideoDeviceState() == 1 ) then
+			GlueDialog_Show("DEVICE_BLACKLISTED");
+			return;
+		end
+		previousCheck = nil;
+	end
+	
+	if ( not previousCheck or previousCheck == "DEVICE" ) then
+		if ( VideoDriverState() == 2 ) then
+			GlueDialog_Show("DRIVER_OUTOFDATE");
+			return;
+		end
+		previousCheck = nil;
+	end
+	
+	if ( not previousCheck or previousCheck == "DRIVER_OOD" ) then
+		if ( VideoDriverState() == 1 ) then
+			GlueDialog_Show("DRIVER_BLACKLISTED");
+			return;
+		end
+		previousCheck = nil;
 	end
 end

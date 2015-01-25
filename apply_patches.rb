@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 Dir["/Users/tekkub/Downloads/*.diff*"].each do |f|
-  /\d\.\d\.\d\.(?<before>\d+)-(?<after>\d+)\.diff/ =~ f
+  /\d\.\d\.\d\.(?<before>\d+)-(\d\.\d\.\d\.)?(?<after>\d+)\.diff/ =~ f
   puts "\n~~~~~~~~~~~~~~ Applying build #{after} ~~~~~~~~~~~~~~"
   puts `git apply "#{f}"`
   puts `git add .`

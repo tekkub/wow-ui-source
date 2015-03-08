@@ -62,6 +62,7 @@ Import("LARGE_NUMBER_SEPERATOR");
 Import("DECIMAL_SEPERATOR");
 Import("CREATE_AUCTION");
 Import("ENABLE_COLORBLIND_MODE");
+Import("TOKEN_PRICE_LOCK_EXPIRE")
 
 RedeemedTokenGUID = nil;
 function WowTokenRedemptionFrame_OnLoad(self)
@@ -77,14 +78,30 @@ function WowTokenRedemptionFrame_OnLoad(self)
 
 	self.Display.Description:SetText(TOKEN_REDEEM_GAME_TIME_DESCRIPTION:format(self.timeGranted));
 	self.Display.RedeemButton:SetText(TOKEN_REDEEM_GAME_TIME_BUTTON_LABEL:format(self.timeGranted));
-	
-	self:RegisterEvent("TOKEN_REDEEM_FRAME_SHOW")
+
+	self:RegisterEvent("TOKEN_REDEEM_FRAME_SHOW");
+	self:RegisterEvent("TOKEN_REDEEM_GAME_TIME_UPDATED");
 end
 
 function WowTokenRedemptionFrame_OnEvent(self, event, ...)
 	if (event == "TOKEN_REDEEM_FRAME_SHOW") then
 		RedeemedTokenGUID = ...;
 		C_WowTokenPublic.UpdateTokenCount();
+		C_WowTokenSecure.GetRemainingGameTime();
+	elseif (event == "TOKEN_REDEEM_GAME_TIME_UPDATED") then
+		local isSub, remaining = C_WowTokenSecure.GetRedemptionInfo();
+
+		local now = time();
+		local oldTime = now + (remaining * 60); -- remaining is in minutes
+		local newTime = oldTime + (30 * 24 * 60 * 60); -- 30 days * 24 hours * 60 minutes * 60 seconds
+
+		local oldDate = date("*t", oldTime);
+		local newDate = date("*t", newTime);
+
+		local str = isSub and TOKEN_REDEEM_GAME_TIME_RENEWAL_FORMAT or TOKEN_REDEEM_GAME_TIME_EXPIRATION_FORMAT;
+
+		self.Display.Format:SetText(str:format(SHORTDATE:format(oldDate.day, oldDate.month, oldDate.year), SHORTDATE:format(newDate.day, newDate.month, newDate.year)));
+		
 		self:Show();
 	end
 end
@@ -214,6 +231,21 @@ function GetRedeemConfirmationDescription()
 	return str:format(SHORTDATE:format(oldDate.day, oldDate.month, oldDate.year), SHORTDATE:format(newDate.day, newDate.month, newDate.year));
 end
 
+function GetTimeLeftString()
+	local _, timeToSell = C_WowTokenPublic.GetCurrentMarketPrice();
+	local timeToSellString;
+	if (timeToSell < (30 * 60)) then -- 30 minutes
+		timeToSellString = AUCTION_TIME_LEFT1_DETAIL;
+	elseif (timeToSell < (60 * 60 * 2)) then -- 2 hours
+		timeToSellString = AUCTION_TIME_LEFT2_DETAIL;
+	elseif (timeToSell < (60 * 60 * 12)) then -- 12 hours
+		timeToSellString = AUCTION_TIME_LEFT3_DETAIL;
+	else -- More than 12 hours
+		timeToSellString = AUCTION_TIME_LEFT4_DETAIL;
+	end
+	return timeToSellString;
+end
+
 -- These are file locals because we don't want to keep variables on the frame itself
 local currentDialog, currentTicker, remainingDialogTime;
 local dialogs = {
@@ -247,14 +279,14 @@ local dialogs = {
 		title = TOKEN_CREATE_AUCTION_TITLE,
 		confirmationDesc = TOKEN_CONFIRM_CREATE_AUCTION,
 		formatConfirmationDesc = true,
-		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenSecure.GetGuaranteedPrice(), true), AUCTION_TIME_LEFT2_DETAIL } end,
+		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenSecure.GetGuaranteedPrice(), true), GetTimeLeftString() } end,
 		button1 = CREATE_AUCTION,
 		button1OnClick = function(self) C_WowTokenSecure.ConfirmSellToken(); self:Hide(); end,
 		button2 = CANCEL,
 		onCancelled = function(self)
 			C_WowTokenSecure.CancelSale();
 		end,
-		timer = 60,
+		timed = true,
 		showCautionText = 20,
 		point = { "TOPLEFT", UIParent, "TOPLEFT", 286, -157 },
 	};
@@ -277,7 +309,7 @@ local dialogs = {
 		button1 = ACCEPT,
 		button1OnClick = function(self) C_WowTokenSecure.ConfirmBuyToken(); self:Hide(); end,
 		button2 = CANCEL,
-		timer = 60,
+		timed = true,
 		showCautionText = 20,
 		spacing = 6,
 		width = 420,
@@ -397,7 +429,9 @@ function WowTokenDialog_SetDialog(self, dialogName)
 
 	if (dialog.button2) then
 		self.Button1:ClearAllPoints();
+		self.Button2:ClearAllPoints();
 		self.Button1:SetPoint("BOTTOMRIGHT", self, "BOTTOM", -8, 16);
+		self.Button2:SetPoint("BOTTOMLEFT", self, "BOTTOM", 8, 16);
 		self.Button2:Show();
 		self.Button2:SetText(dialog.button2);
 	else
@@ -406,9 +440,19 @@ function WowTokenDialog_SetDialog(self, dialogName)
 		self.Button1:SetPoint("BOTTOM", 0, 16);
 	end
 
+	self.Button1:SetText(dialog.button1);
+
+	local finalWidth;
+	if (dialog.width) then
+		finalWidth = dialog.width;
+	else
+		finalWidth = width + extraWidth;
+	end
+	self:SetSize(finalWidth, height);
+
 	self.CautionText:Hide();
-	if (dialog.timer) then
-		remainingDialogTime = dialog.timer;
+	if (dialog.timed) then
+		remainingDialogTime = C_WowTokenSecure.GetPriceLockDuration();
 		if (not currentTicker) then
 			currentTicker = NewSecureTicker(1, function()
 				if (remainingDialogTime == 0) then
@@ -419,10 +463,31 @@ function WowTokenDialog_SetDialog(self, dialogName)
 					currentTicker = nil;
 					self:Hide();
 				elseif (remainingDialogTime <= (dialog.showCautionText and dialog.showCautionText or 20)) then
-					self.CautionText:SetText(remainingDialogTime);
+					self.CautionText:SetText(TOKEN_PRICE_LOCK_EXPIRE:format(remainingDialogTime));
 					self.CautionText:Show();
+					local newHeight = height + self.CautionText:GetHeight() + 20;
+					if (dialog.button2) then
+						self.Button1:ClearAllPoints();
+						self.Button2:ClearAllPoints();
+						self.Button1:SetPoint("BOTTOMRIGHT", self, "BOTTOM", -8, 46);
+						self.Button2:SetPoint("BOTTOMLEFT", self, "BOTTOM", 8, 46);
+					else
+						self.Button1:ClearAllPoints();
+						self.Button1:SetPoint("BOTTOM", 0, 46);
+					end
+					self:SetSize(finalWidth, newHeight);
 				else
 					self.CautionText:Hide();
+					if (dialog.button2) then
+						self.Button1:ClearAllPoints();
+						self.Button2:ClearAllPoints();
+						self.Button1:SetPoint("BOTTOMRIGHT", self, "BOTTOM", -8, 16);
+						self.Button2:SetPoint("BOTTOMLEFT", self, "BOTTOM", 8, 16);
+					else
+						self.Button1:ClearAllPoints();
+						self.Button1:SetPoint("BOTTOM", 0, 16);
+					end
+					self:SetSize(finalWidth, height);
 				end
 				remainingDialogTime = remainingDialogTime - 1;
 			end);
@@ -433,15 +498,6 @@ function WowTokenDialog_SetDialog(self, dialogName)
 			currentTicker = nil;
 		end
 	end
-	self.Button1:SetText(dialog.button1);
-
-	local finalWidth;
-	if (dialog.width) then
-		finalWidth = dialog.width;
-	else
-		finalWidth = width + extraWidth;
-	end
-	self:SetSize(finalWidth, height);
 end
 
 function WowTokenDialog_OnLoad(self)

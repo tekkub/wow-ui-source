@@ -55,7 +55,7 @@
 									<Anchor point="TOP" y="-174"/>
 								</Anchors>
 							</FontString>
-							<FontString parentKey="Format" inherits="GameFontNormal" hidden="true">
+							<FontString parentKey="Format" inherits="GameFontNormal">
 								<Size x="280" y="0"/>
 								<Anchors>
 									<Anchor point="TOP" x="0" y="-230"/>
@@ -118,18 +118,18 @@
 					</Texture>
 				</Layer>
 				<Layer level="ARTWORK">
-					<FontString parentKey="Title" inherits="GameFontNormalLarge" text="Complete!">
+					<FontString parentKey="Title" inherits="GameFontNormalLarge">
 						<Anchors>
 							<Anchor point="TOP" relativeKey="$parent.CompletionIcon" relativePoint="BOTTOM" x="0" y="-12"/>
 						</Anchors>
 					</FontString>
-					<FontString parentKey="Description" inherits="GameFontHighlight" text="30 days of game time will be added to your World of Warcraft account.  You will receive a confirmation email shortly.">
+					<FontString parentKey="Description" inherits="GameFontHighlight">
 						<Size x="0" y="0"/>
 						<Anchors>
 							<Anchor point="TOP" relativeKey="$parent.Title" relativePoint="BOTTOM" x="0" y="-16"/>
 						</Anchors>
 					</FontString>
-					<FontString parentKey="ConfirmationDesc" inherits="GameFontNormal" text="Current Account Expiration Date: |cffffffff4/28/14|r|nNew Expiration Date: |cffffffff5/28/14|r" hidden="true">
+					<FontString parentKey="ConfirmationDesc" inherits="GameFontNormal" hidden="true">
 						<Size x="0" y="0"/>
 						<Anchors>
 							<Anchor point="TOP" relativeKey="$parent.Description" relativePoint="BOTTOM" x="0" y="-16"/>
@@ -137,7 +137,7 @@
 					</FontString>
 					<FontString parentKey="CautionText" inherits="GameFontRed" hidden="true">
 						<Anchors>
-							<Anchor point="TOPRIGHT" x="-16" y="-16"/>
+							<Anchor point="BOTTOM" x="0" y="23"/>
 						</Anchors>
 					</FontString>
 				</Layer>

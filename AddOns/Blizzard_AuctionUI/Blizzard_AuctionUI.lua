@@ -246,6 +246,8 @@ StaticPopupDialogs["CANCEL_AUCTION"] = {
 	hideOnEscape = 1
 };
 
+WowTokenPriceUpdateTimer = nil;
+
 function AuctionFrame_OnLoad (self)
 
 	-- Tab Handling code
@@ -564,7 +566,6 @@ end
 
 function AuctionFrameBrowse_Search()
 	if (AuctionFrameBrowse.selectedClass == TOKEN_FILTER_LABEL) then
-		C_WowTokenPublic.UpdateMarketPrice();
 		BrowseWowTokenResults_Update();
 		BrowseNoResultsText:Hide();
 		BrowseQualitySort:Hide();
@@ -572,11 +573,13 @@ function AuctionFrameBrowse_Search()
 		BrowseDurationSort:Hide();
 		BrowseHighBidderSort:Hide();
 		BrowseCurrentBidSort:Hide();
+		AuctionWowToken_UpdateMarketPrice();
 	else
 		if ( not AuctionFrameBrowse.page ) then
 			AuctionFrameBrowse.page = 0;
 		end
 
+		AuctionWowToken_CancelUpdateTicker();
 		AuctionFrameBrowse_SearchHelper(BrowseName:GetText(), BrowseMinLevel:GetText(), BrowseMaxLevel:GetText(), AuctionFrameBrowse.selectedInvtypeIndex, AuctionFrameBrowse.selectedClassIndex, AuctionFrameBrowse.selectedSubclassIndex, AuctionFrameBrowse.page, IsUsableCheckButton:GetChecked(), UIDropDownMenu_GetSelectedValue(BrowseDropDown), ExactMatchCheckButton:GetChecked());
 
 		-- Start "searching" messaging
@@ -782,8 +785,8 @@ function AuctionFrameFilter_OnClick(self, button)
 				WowTokenGameTimeTutorial:Show();
 				SetCVarBitfield("closedInfoFrames", LE_FRAME_TUTORIAL_GAME_TIME_AUCTION_HOUSE, true);
 			end
-			C_WowTokenPublic.UpdateMarketPrice();
 			BrowseWowTokenResults_Update();
+			AuctionWowToken_UpdateMarketPrice();
 			BrowseBidButton:Hide();
 			BrowseBuyoutButton:Hide();
 			BrowseBidPrice:Hide();
@@ -807,6 +810,7 @@ function AuctionFrameFilter_OnClick(self, button)
 			BrowseHighBidderSort:Show();
 			BrowseCurrentBidSort:Show();
 			if (wasToken) then
+				AuctionWowToken_CancelUpdateTicker();
 				BrowseNoResultsText:SetText(BROWSE_SEARCH_TEXT);
 				BrowseNoResultsText:Show();
 			end
@@ -1037,11 +1041,14 @@ end
 
 function BrowseWowTokenResults_OnLoad(self)
 	self:RegisterEvent("TOKEN_MARKET_PRICE_UPDATED");
+	self:RegisterEvent("TOKEN_STATUS_CHANGED");
 end
 
 function BrowseWowTokenResults_OnEvent(self, event)
 	if (event == "TOKEN_MARKET_PRICE_UPDATED") then
 		BrowseWowTokenResults_Update();
+	elseif (event == "TOKEN_STATUS_CHANGED") then
+		AuctionWowToken_UpdateMarketPrice();
 	end
 end
 
@@ -1277,12 +1284,13 @@ function AuctionFrameAuctions_OnLoad(self)
 	self:RegisterEvent("AUCTION_MULTISELL_START");
 	self:RegisterEvent("AUCTION_MULTISELL_UPDATE");
 	self:RegisterEvent("AUCTION_MULTISELL_FAILURE");
+	self:RegisterEvent("TOKEN_DISTRIBUTIONS_UPDATED");
 	-- set default sort
 	AuctionFrame_SetSort("owner", "duration", false);
 end
 
 function AuctionFrameAuctions_OnEvent(self, event, ...)
-	if ( event == "AUCTION_OWNED_LIST_UPDATE" ) then
+	if ( event == "AUCTION_OWNED_LIST_UPDATE" or event == "TOKEN_DISTRIBUTIONS_UPDATED" ) then
 		AuctionFrameAuctions_Update();
 	elseif ( event == "AUCTION_MULTISELL_START" ) then
 		local arg1 = ...;
@@ -1335,10 +1343,12 @@ end
 
 function AuctionFrameAuctions_Update()
 	local numBatchAuctions, totalAuctions = GetNumAuctionItems("owner");
+	local tokenCount = C_WowTokenPublic.GetNumListedAuctionableTokens();
+	numBatchAuctions = numBatchAuctions + tokenCount;
 	local offset = FauxScrollFrame_GetOffset(AuctionsScrollFrame);
 	local index;
 	local isLastSlotEmpty;
-	local auction, button, buttonName, buttonHighlight, iconTexture, itemName, color, itemCount, duration;
+	local auction, button, buttonName, buttonHighlight, iconTexture, itemName, color, itemCount, duration, timeToSell;
 	local highBidderFrame;
 	local closingTimeFrame, closingTimeText;
 	local buttonBuyoutFrame, buttonBuyoutMoney;
@@ -1363,11 +1373,28 @@ function AuctionFrameAuctions_Update()
 		else
 			auction:Show();
 			
-			name, texture, count, quality, canUse, level, levelColHeader, minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFullName, owner, ownerFullName, saleStatus, itemID = GetAuctionItemInfo("owner", offset + i);
-			
-			local isWowToken = C_WowTokenPublic.IsAuctionableWowToken(itemID);
+			local isWowToken;
 
-			duration = GetAuctionItemTimeLeft("owner", offset + i);
+			if (index <= tokenCount) then
+				itemID, buyoutPrice, timeToSell = C_WowTokenPublic.GetListedAuctionableTokenInfo(index);
+				count = 1;
+				canUse = true;
+				name, _, quality, _, _, _, _, _, _, texture = GetItemInfo(itemID);
+				if (timeToSell < (30 * 60)) then -- 30 minutes
+					duration = 1;
+				elseif (timeToSell < (60 * 60 * 2)) then -- 2 hours
+					duration = 2;
+				elseif (timeToSell < (60 * 60 * 12)) then -- 12 hours
+					duration = 3;
+				else
+					duration = 4;
+				end
+				isWowToken = true;
+			else
+				name, texture, count, quality, canUse, level, levelColHeader, minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFullName, owner, ownerFullName, saleStatus, itemID = GetAuctionItemInfo("owner", (offset - tokenCount) + i);
+	
+				duration = GetAuctionItemTimeLeft("owner", (offset - tokenCount) + i);
+			end
 
 			buttonName = "AuctionsButton"..i;
 			button = _G[buttonName];
@@ -1664,13 +1691,14 @@ function AuctionSellItemButton_OnEvent(self, event, ...)
 			StartPrice:Hide();
 			BuyoutPrice:Hide();
 			DurationDropDown:Hide();
-			C_WowTokenPublic.UpdateMarketPrice();
 			C_WowTokenPublic.UpdateTokenCount();
 			AuctionsWowTokenAuctionFrame_Update();
+			AuctionsWowTokenAuctionFrame:Show();
 			AuctionsItemButton:SetNormalTexture(texture);
 			AuctionsItemButtonName:SetText(name);
 			local color = ITEM_QUALITY_COLORS[quality];
 			AuctionsItemButtonName:SetVertexColor(color.r, color.g, color.b);
+			AuctionWowToken_UpdateMarketPrice();
 			MoneyFrame_Update("AuctionsDepositMoneyFrame", 0, true);
 		else
 			StartPrice:Show();
@@ -1709,6 +1737,7 @@ function AuctionSellItemButton_OnEvent(self, event, ...)
 			end
 			AuctionsStackSizeEntry:SetNumber(count);
 			AuctionsNumStacksEntry:SetNumber(1);
+			AuctionWowToken_CancelUpdateTicker();
 			if ( name == LAST_ITEM_AUCTIONED and count == LAST_ITEM_COUNT ) then
 				MoneyInputFrame_SetCopper(StartPrice, LAST_ITEM_START_BID);
 				MoneyInputFrame_SetCopper(BuyoutPrice, LAST_ITEM_BUYOUT);
@@ -1844,19 +1873,54 @@ end
 
 function AuctionsWowTokenAuctionFrame_OnLoad(self)
 	self:RegisterEvent("TOKEN_MARKET_PRICE_UPDATED");
+	self:RegisterEvent("TOKEN_STATUS_CHANGED");
 end
 
 function AuctionsWowTokenAuctionFrame_OnEvent(self, event)
 	if (event == "TOKEN_MARKET_PRICE_UPDATED") then
 		AuctionsWowTokenAuctionFrame_Update();
+	elseif (event == "TOKEN_STATUS_CHANGED") then
+		AuctionWowToken_UpdateMarketPrice();
 	end
 end
 
 function AuctionsWowTokenAuctionFrame_Update()
-	AuctionsWowTokenAuctionFrame:Show();
-	AuctionsWowTokenAuctionFrame.MarketPrice:SetText(GetMoneyString(C_WowTokenPublic.GetCurrentMarketPrice(), true));
-	-- TEMP:  This comes back as part of GetCurrentMarketPrice, update this with that info
-	AuctionsWowTokenAuctionFrame.TimeToSell:SetText(AUCTION_TIME_LEFT3_DETAIL);
+	local price, timeToSell = C_WowTokenPublic.GetCurrentMarketPrice();
+	AuctionsWowTokenAuctionFrame.MarketPrice:SetText(GetMoneyString(price, true));
+	local timeToSellString;
+	if (timeToSell < (30 * 60)) then -- 30 minutes
+		timeToSellString = AUCTION_TIME_LEFT1_DETAIL;
+	elseif (timeToSell < (60 * 60 * 2)) then -- 2 hours
+		timeToSellString = AUCTION_TIME_LEFT2_DETAIL;
+	elseif (timeToSell < (60 * 60 * 12)) then -- 12 hours
+		timeToSellString = AUCTION_TIME_LEFT3_DETAIL;
+	else
+		timeToSellString = AUCTION_TIME_LEFT4_DETAIL;
+	end
+	AuctionsWowTokenAuctionFrame.TimeToSell:SetText(timeToSellString);
+end
+
+function AuctionWowToken_UpdateMarketPrice()
+	C_WowTokenPublic.UpdateMarketPrice();
+	if (BrowseWowTokenResults:IsShown() or AuctionsWowTokenAuctionFrame:IsShown()) then
+		local _, pollTimeSeconds = C_WowTokenPublic.GetCommerceSystemStatus();
+		if (not WowTokenPriceUpdateTimer or pollTimeSeconds ~= WowTokenPriceUpdateTimer.pollTimeSeconds) then
+			if (WowTokenPriceUpdateTimer) then
+				WowTokenPriceUpdateTimer:Cancel();
+			end
+			WowTokenPriceUpdateTimer = C_Timer.NewTicker(pollTimeSeconds, AuctionWowToken_UpdateMarketPrice);
+			WowTokenPriceUpdateTimer.pollTimeSeconds = pollTimeSeconds;
+		end
+	else
+		AuctionWowToken_CancelUpdateTicker();
+	end
+end
+
+function AuctionWowToken_CancelUpdateTicker()
+	if (WowTokenPriceUpdateTimer) then
+		WowTokenPriceUpdateTimer:Cancel();
+		WowTokenPriceUpdateTimer = nil;
+	end
 end
 
 -- SortButton functions

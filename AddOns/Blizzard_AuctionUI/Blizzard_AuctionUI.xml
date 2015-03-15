@@ -400,19 +400,10 @@
 						</Scripts>
 					</ScrollFrame>
 					<Frame name="BrowseWowTokenResults" hidden="true">
-						<Size x="597" y="306"/>
+						<Size x="634" y="306"/>
 						<Anchors>
-							<Anchor point="TOPLEFT" x="195" y="-110"/>
+							<Anchor point="TOPLEFT" x="188" y="-103"/>
 						</Anchors>
-						<Layers>
-							<Layer level="ARTWORK">
-								<FontString parentKey="BuyoutPrice" inherits="GameFontNormalLarge">
-									<Anchors>
-										<Anchor point="BOTTOM" x="20" y="122"/>
-									</Anchors>
-								</FontString>
-							</Layer>
-						</Layers>
 						<Frames>
 							<Frame name="WowTokenGameTimeTutorial" inherits="ButtonFrameTemplate" frameStrata="DIALOG" hidden="true">
 								<Size x="646" y="540"/>
@@ -551,7 +542,10 @@
 														self.Logo:ClearAllPoints();
 														self.Logo:SetPoint("RIGHT", fontString, "LEFT", -2, 0);
 													</OnLoad>
-													<OnClick function="ToggleStoreUI"/>
+													<OnClick>
+														ToggleStoreUI();
+														StoreFrame_SetTokenCategory();
+													</OnClick>
 													<OnMouseDown>
 														local fontString = self:GetFontString();
 														self.Logo:SetPoint("RIGHT", fontString, "LEFT", -1, -2);
@@ -586,11 +580,19 @@
 										ButtonFrameTemplate_HideButtonBar(self);
 										self.TitleText:SetText(TUTORIAL_TOKEN_ABOUT_TOKENS);
 									</OnLoad>
+									<OnShow>
+										local redeemIndex = select(3, C_WowTokenPublic.GetCommerceSystemStatus());
+										if (redeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
+											self.LeftDisplay.Tutorial3:SetText(TUTORIAL_TOKEN_GAME_TIME_STEP_2);
+										elseif (redeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES) then
+											self.LeftDisplay.Tutorial3:SetText(TUTORIAL_TOKEN_GAME_TIME_STEP_2_MINUTES);
+										end
+									</OnShow>
 								</Scripts>
 							</Frame>
 							<Button name="$parentTutorialButton" parentKey="HelpButton" inherits="MainHelpPlateButton">
 								<Anchors>
-									<Anchor point="TOPRIGHT" x="34" y="14" />
+									<Anchor point="TOPRIGHT" x="10" y="10" />
 								</Anchors>
 								<Scripts>
 									<OnLoad>
@@ -604,7 +606,7 @@
 							<Button parentKey="Token" name="$parentToken">
 								<Size x="254" y="61"/>
 								<Anchors>
-									<Anchor point="BOTTOM" relativeKey="$parent.BuyoutPrice" relativePoint="TOP" x="0" y="60"/>
+									<Anchor point="TOP" x="0" y="-63"/>
 								</Anchors>
 								<Layers>
 									<Layer level="BACKGROUND">
@@ -622,9 +624,9 @@
 											</Anchors>
 										</Texture>
 										<FontString name="$parentName" inherits="GameFontHighlightLarge" justifyH="LEFT" parentKey="Name">
-											<Size x="204" y="46"/>
+											<Size x="172" y="46"/>
 											<Anchors>
-												<Anchor point="CENTER" x="56" y="0"/>
+												<Anchor point="LEFT" x="73" y="0"/>
 											</Anchors>
 										</FontString>
 									</Layer>
@@ -649,7 +651,7 @@
 							<Button parentKey="Buyout" inherits="UIPanelButtonTemplate" text="BUYOUT" motionScriptsWhileDisabled="true">
 								<Size x="140" y="30"/>
 								<Anchors>
-									<Anchor point="TOP" relativeKey="$parent.BuyoutPrice" relativePoint="BOTTOM" x="0" y="-26"/>
+									<Anchor point="TOP" relativeKey="$parent.Token" relativePoint="BOTTOM" x="0" y="-87"/>
 								</Anchors>
 								<Scripts>
 									<OnClick function="BrowseWowTokenResultsBuyout_OnClick"/>
@@ -658,6 +660,15 @@
 								</Scripts>
 							</Button>
 						</Frames>
+						<Layers>
+							<Layer level="ARTWORK">
+								<FontString parentKey="BuyoutPrice" inherits="GameFontNormalLarge">
+									<Anchors>
+										<Anchor point="BOTTOM" x="0" y="117"/>
+									</Anchors>
+								</FontString>
+							</Layer>
+						</Layers>
 						<Scripts>
 							<OnLoad function="BrowseWowTokenResults_OnLoad"/>
 							<OnEvent function="BrowseWowTokenResults_OnEvent"/>
@@ -2096,7 +2107,7 @@
 							<Layer level="ARTWORK">
 								<FontString parentKey="BuyoutPriceLabel" inherits="GameFontNormalSmall" text="BUYOUT_PRICE" justifyH="LEFT">
 									<Anchors>
-										<Anchor point="TOPLEFT" x="8" y="-36"/>
+										<Anchor point="TOPLEFT" x="6" y="-28"/>
 									</Anchors>
 								</FontString>
 								<FontString parentKey="MarketPrice" inherits="GameFontHighlight" justifyH="LEFT">
@@ -2106,7 +2117,7 @@
 								</FontString>
 								<FontString parentKey="EstimatedTime" inherits="GameFontNormalSmall" text="ESTIMATED_TIME_TO_SELL" justifyH="LEFT">
 									<Anchors>
-										<Anchor point="TOPLEFT" relativeKey="$parent.BuyoutPriceLabel" relativePoint="BOTTOMLEFT" x="0" y="-42"/>
+										<Anchor point="TOPLEFT" relativeKey="$parent.BuyoutPriceLabel" relativePoint="BOTTOMLEFT" x="0" y="-38"/>
 									</Anchors>
 								</FontString>
 								<FontString parentKey="TimeToSell" inherits="GameFontHighlight" justifyH="LEFT">

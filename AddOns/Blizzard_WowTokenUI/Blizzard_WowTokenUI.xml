@@ -2,7 +2,7 @@
 ..\FrameXML\UI.xsd">
 	<Script file="Blizzard_WowTokenUI.lua"/>
 	<ScopedModifier forbidden="true" scriptsUseGivenEnv="true">
-		<Frame name="WowTokenRedemptionFrame" inherits="PortraitFrameTemplateNoCloseButton" frameStrata="DIALOG" parent="UIParent" hidden="true">
+		<Frame name="WowTokenRedemptionFrame" inherits="PortraitFrameTemplateNoCloseButton" frameStrata="DIALOG" parent="UIParent" enableMouse="true" hidden="true">
 			<Size x="325" y="450"/>
 			<!-- Anchored to the screen as a whole in lua -->
 			<Layers>
@@ -81,7 +81,7 @@
 				<OnEvent function="WowTokenRedemptionFrame_OnEvent"/>
 			</Scripts>
 		</Frame>
-		<Frame name="WowTokenDialog" parent="UIParent" frameStrata="DIALOG" toplevel="true" enableMouse="false" hidden="true">
+		<Frame name="WowTokenDialog" parent="UIParent" frameStrata="DIALOG" toplevel="true" enableMouse="true" hidden="true">
 			<Size x="434" y="216" />
 			<!-- Anchors are set by the dialogs in lua -->
 			<Backdrop edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">

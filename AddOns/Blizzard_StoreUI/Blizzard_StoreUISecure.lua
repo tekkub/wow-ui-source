@@ -155,6 +155,7 @@ Import("CHARACTER_UPGRADE_READY");
 Import("CHARACTER_UPGRADE_READY_DESCRIPTION");
 Import("FREE_CHARACTER_UPGRADE_READY");
 Import("FREE_CHARACTER_UPGRADE_READY_DESCRIPTION");
+Import("TOKEN_CURRENT_AUCTION_VALUE");
 
 Import("OKAY");
 Import("LARGE_NUMBER_SEPERATOR");
@@ -208,6 +209,7 @@ local STORETOOLTIP_MAX_WIDTH = 250;
 local COPPER_PER_SILVER = 100;
 local SILVER_PER_GOLD = 100;
 local COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
+local WOW_TOKEN_CATEGORY_ID = 30;
 
 local PI = math.pi;
 
@@ -577,7 +579,7 @@ local function getIndex(tbl, value)
 end
 
 function StoreFrame_UpdateCard(card,entryID,discountReset)
-	local productID, _, bannerType, alreadyOwned, normalDollars, normalCents, currentDollars, currentCents, buyableHere, name, description, displayID, texture, upgrade = C_PurchaseAPI.GetEntryInfo(entryID);
+	local productID, _, bannerType, alreadyOwned, normalDollars, normalCents, currentDollars, currentCents, buyableHere, name, description, displayID, texture, upgrade, token, itemID = C_PurchaseAPI.GetEntryInfo(entryID);
 	StoreProductCard_ResetCornerPieces(card);
 
 	local info = currencyInfo();
@@ -680,6 +682,17 @@ function StoreFrame_UpdateCard(card,entryID,discountReset)
 		if (card.ProductName:IsTruncated()) then
 			card.ProductName:SetFontObject("GameFontNormalHuge3");
 		end
+
+		if (token) then
+			card.CurrentMarketPrice:SetText(TOKEN_CURRENT_AUCTION_VALUE:format(GetSecureMoneyString(C_WowTokenPublic.GetCurrentMarketPrice(), true)));
+			card.CurrentPrice:ClearAllPoints();
+			card.CurrentPrice:SetPoint("TOPLEFT", card.CurrentMarketPrice, "BOTTOMLEFT", 0, -28);
+			card.CurrentMarketPrice:Show();
+		else
+			card.CurrentMarketPrice:Hide();
+			card.CurrentPrice:ClearAllPoints();
+			card.CurrentPrice:SetPoint("TOPLEFT", card.Description, "BOTTOMLEFT", 0, -28);
+		end
 	end
 	
 	if (card.Description) then
@@ -693,7 +706,7 @@ function StoreFrame_UpdateCard(card,entryID,discountReset)
 		if (not icon) then
 			icon = "Interface\\Icons\\INV_Misc_Note_02";
 		end
-		StoreProductCard_ShowIcon(card, icon);
+		StoreProductCard_ShowIcon(card, icon, itemID);
 	end
 
 	if (discount) then
@@ -1155,6 +1168,10 @@ function StoreFrame_OnAttributeChanged(self, name, value)
 		StoreFrame_UpdateCoverState();
 	elseif ( name == "checkforfree" ) then
 		StoreFrame_CheckForFree(self, value);
+	elseif ( name == "settokencategory" ) then
+		StoreFrame_UpdateCategories(StoreFrame);
+		selectedCategoryID = WOW_TOKEN_CATEGORY_ID;
+		StoreFrame_SetCategory();
 	end
 end
 
@@ -1746,6 +1763,7 @@ local cardModels = {}
 function StoreProductCard_SetModel(self, modelID, owned)
 	self.IconBorder:Hide();
 	self.Icon:Hide();
+	self.InvisibleIconFrame:Hide();
 
 	if (self.GlowSpin) then
 		self.GlowSpin:Hide();
@@ -1778,7 +1796,7 @@ function StoreProductCard_SetModel(self, modelID, owned)
 	end
 end
 
-function StoreProductCard_ShowIcon(self, icon)
+function StoreProductCard_ShowIcon(self, icon, itemID)
 	self.Model:Hide();
 	self.Shadows:Hide();
 	
@@ -1788,6 +1806,11 @@ function StoreProductCard_ShowIcon(self, icon)
 
 	self.IconBorder:Show();
 	self.Icon:Show();
+	if (itemID) then
+		self.InvisibleIconFrame:Show();
+	else
+		self.InvisibleIconFrame:Hide();
+	end
 
 	SetPortraitToTexture(self.Icon, icon);
 	if (self == StoreFrame.SplashSingle) then
@@ -1883,6 +1906,37 @@ function StoreProductCardCheckmark_OnEnter(self)
 		StoreTooltip:SetPoint(point, self, rpoint, xoffset, 0);
 		StoreTooltip_Show(BLIZZARD_STORE_YOU_ALREADY_OWN_THIS);
 	end
+end
+
+function StoreProductCardItem_OnEnter(self)
+	local card = self:GetParent();
+	StoreProductCard_OnEnter(card);
+	local entryID = card:GetID();
+	local itemID = select(16, C_PurchaseAPI.GetEntryInfo(entryID));
+
+	local x, y, point;
+
+	if (card == StoreFrame.SplashSingle or card == StoreFrame.SplashPrimary) then
+		x = card.Icon:GetLeft();
+		y = card.Icon:GetTop();
+		point = "BOTTOMRIGHT";
+	elseif (tooltipSides[card] == "LEFT") then
+		x = card:GetLeft() + 4;
+		y = card:GetTop();
+		point = "BOTTOMRIGHT";
+	else
+		x = card:GetRight() - 4;
+		y = card:GetTop();
+		point = "BOTTOMLEFT";
+	end
+	StoreTooltip:Hide();
+	Outbound.SetItemTooltip(itemID, x, y, point);
+end
+
+function StoreProductCardItem_OnLeave(self)
+	StoreProductCard_OnLeave(self:GetParent());
+	StoreProductCard_UpdateState(self:GetParent());
+	Outbound.ClearItemTooltip();
 end
 
 function StoreProductCardCheckmark_OnLeave(self)

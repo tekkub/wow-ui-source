@@ -23,7 +23,7 @@ Import("tostring");
 Import("tonumber");
 Import("date");
 Import("time");
-
+Import("type");
 Import("TOKEN_REDEEM_LABEL"); 
 Import("TOKEN_REDEEM_GAME_TIME_TITLE"); 
 Import("TOKEN_REDEEM_GAME_TIME_DESCRIPTION"); 
@@ -40,6 +40,12 @@ Import("TOKEN_CONFIRM_GAME_TIME_EXPIRATION_CONFIRMATION_DESCRIPTION");
 Import("TOKEN_CONFIRM_GAME_TIME_RENEWAL_CONFIRMATION_DESCRIPTION"); 
 Import("TOKEN_COMPLETE_GAME_TIME_DESCRIPTION"); 
 Import("TOKEN_BUYOUT_AUCTION_CONFIRMATION_DESCRIPTION");
+Import("TOKEN_PRICE_LOCK_EXPIRE");
+Import("TOKEN_REDEEM_GAME_TIME_EXPIRATION_FORMAT_MINUTES");
+Import("TOKEN_COMPLETE_GAME_TIME_DESCRIPTION_MINUTES");
+Import("TOKEN_CONFIRM_GAME_TIME_EXPIRATION_CONFIRMATION_DESCRIPTION_MINUTES");
+Import("TOKEN_REDEEM_GAME_TIME_BUTTON_LABEL_MINUTES");
+Import("TOKEN_REDEEM_GAME_TIME_DESCRIPTION_MINUTES");
 
 Import("GOLD_AMOUNT_SYMBOL");
 Import("GOLD_AMOUNT_TEXTURE");
@@ -62,13 +68,20 @@ Import("LARGE_NUMBER_SEPERATOR");
 Import("DECIMAL_SEPERATOR");
 Import("CREATE_AUCTION");
 Import("ENABLE_COLORBLIND_MODE");
-Import("TOKEN_PRICE_LOCK_EXPIRE")
+Import("WEEKS_ABBR");
+Import("DAYS_ABBR");
+Import("HOURS_ABBR");
+Import("MINUTES_ABBR");
+
+Import("LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS");
+Import("LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES");
 
 RedeemedTokenGUID = nil;
-function WowTokenRedemptionFrame_OnLoad(self)
-	self.timeGranted = 30;
 
-	self:SetPoint("CENTER", UIParent, "CENTER");
+RedeemIndex = nil;
+function WowTokenRedemptionFrame_OnLoad(self)
+	RedeemIndex = select(3, C_WowTokenPublic.GetCommerceSystemStatus());
+	self:SetPoint("CENTER", UIParent, "CENTER", 0, 60);
 
 	self.portrait:Hide();
 	self.portraitFrame:Hide();
@@ -76,21 +89,49 @@ function WowTokenRedemptionFrame_OnLoad(self)
 	self.topBorderBar:SetPoint("TOPLEFT", self.topLeftCorner, "TOPRIGHT",  0, 0);
 	self.leftBorderBar:SetPoint("TOPLEFT", self.topLeftCorner, "BOTTOMLEFT",  0, 0);
 
-	self.Display.Description:SetText(TOKEN_REDEEM_GAME_TIME_DESCRIPTION:format(self.timeGranted));
-	self.Display.RedeemButton:SetText(TOKEN_REDEEM_GAME_TIME_BUTTON_LABEL:format(self.timeGranted));
-
 	self:RegisterEvent("TOKEN_REDEEM_FRAME_SHOW");
 	self:RegisterEvent("TOKEN_REDEEM_GAME_TIME_UPDATED");
+	self:RegisterEvent("TOKEN_STATUS_CHANGED");
 end
 
-function WowTokenRedemptionFrame_OnEvent(self, event, ...)
-	if (event == "TOKEN_REDEEM_FRAME_SHOW") then
-		RedeemedTokenGUID = ...;
-		C_WowTokenPublic.UpdateTokenCount();
-		C_WowTokenSecure.GetRemainingGameTime();
-	elseif (event == "TOKEN_REDEEM_GAME_TIME_UPDATED") then
-		local isSub, remaining = C_WowTokenSecure.GetRedemptionInfo();
+function GetTimeLeftMinuteString(minutes)
+	local weeks = 7 * 24 * 60; -- 7 days, 24 hours, 60 minutes
+	local days = 24 * 60; -- 24 hours, 60 minutes
+	local hours = 60; -- 60 minutes
 
+	local str = "";
+	if (math.floor(minutes / weeks) > 0) then
+		local wks = math.floor(minutes / weeks);
+
+		minutes = minutes - (wks * weeks);
+		str = str .. WEEKS_ABBR:format(wks);
+	end
+
+	if (math.floor(minutes / days) > 0) then
+		local dys = math.floor(minutes / days);
+
+		minutes = minutes - (dys * days);
+		str = str .. " " .. DAYS_ABBR:format(dys);
+	end
+
+	if (math.floor(minutes / hours) > 0) then
+		local hrs = math.floor(minutes / hours);
+
+		minutes = minutes - (hrs * hours);
+		str = str .. " " .. HOURS_ABBR:format(hrs);
+	end
+
+	if (minutes > 0) then
+		str = str .. " " .. MINUTES_ABBR:format(minutes);
+	end
+
+	return str;
+end
+
+function GetRedemptionString()
+	local isSub, remaining = C_WowTokenSecure.GetRedemptionInfo();
+
+	if (RedeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
 		local now = time();
 		local oldTime = now + (remaining * 60); -- remaining is in minutes
 		local newTime = oldTime + (30 * 24 * 60 * 60); -- 30 days * 24 hours * 60 minutes * 60 seconds
@@ -100,9 +141,30 @@ function WowTokenRedemptionFrame_OnEvent(self, event, ...)
 
 		local str = isSub and TOKEN_REDEEM_GAME_TIME_RENEWAL_FORMAT or TOKEN_REDEEM_GAME_TIME_EXPIRATION_FORMAT;
 
-		self.Display.Format:SetText(str:format(SHORTDATE:format(oldDate.day, oldDate.month, oldDate.year), SHORTDATE:format(newDate.day, newDate.month, newDate.year)));
+		return str:format(SHORTDATE:format(oldDate.day, oldDate.month, oldDate.year), SHORTDATE:format(newDate.day, newDate.month, newDate.year))
+	elseif (RedeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES) then
+		return TOKEN_REDEEM_GAME_TIME_EXPIRATION_FORMAT_MINUTES:format(GetTimeLeftMinuteString(remaining), GetTimeLeftMinuteString(remaining + 2700));
+	end
+end
+
+function WowTokenRedemptionFrame_OnEvent(self, event, ...)
+	if (event == "TOKEN_REDEEM_FRAME_SHOW") then
+		RedeemedTokenGUID = ...;
+		C_WowTokenPublic.UpdateTokenCount();
+		C_WowTokenSecure.GetRemainingGameTime();
+	elseif (event == "TOKEN_REDEEM_GAME_TIME_UPDATED") then
+		if (RedeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
+			self.Display.Description:SetText(TOKEN_REDEEM_GAME_TIME_DESCRIPTION);
+			self.Display.RedeemButton:SetText(TOKEN_REDEEM_GAME_TIME_BUTTON_LABEL);
+		elseif (RedeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES) then
+			self.Display.Description:SetText(TOKEN_REDEEM_GAME_TIME_DESCRIPTION_MINUTES);
+			self.Display.RedeemButton:SetText(TOKEN_REDEEM_GAME_TIME_BUTTON_LABEL_MINUTES);
+		end
+		self.Display.Format:SetText(GetRedemptionString());
 		
 		self:Show();
+	elseif (event == "TOKEN_STATUS_CHANGED") then
+		RedeemIndex = select(3, C_WowTokenPublic.GetCommerceSystemStatus());
 	end
 end
 
@@ -216,21 +278,6 @@ function NewSecureTicker(duration, callback, iterations)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 
-function GetRedeemConfirmationDescription()
-	local isSub, remaining = C_WowTokenSecure.GetRedemptionInfo();
-
-	local now = time();
-	local oldTime = now + (remaining * 60); -- remaining is in minutes
-	local newTime = oldTime + (30 * 24 * 60 * 60); -- 30 days * 24 hours * 60 minutes * 60 seconds
-
-	local oldDate = date("*t", oldTime);
-	local newDate = date("*t", newTime);
-
-	local str = isSub and TOKEN_REDEEM_GAME_TIME_RENEWAL_FORMAT or TOKEN_REDEEM_GAME_TIME_EXPIRATION_FORMAT;
-
-	return str:format(SHORTDATE:format(oldDate.day, oldDate.month, oldDate.year), SHORTDATE:format(newDate.day, newDate.month, newDate.year));
-end
-
 function GetTimeLeftString()
 	local _, timeToSell = C_WowTokenPublic.GetCurrentMarketPrice();
 	local timeToSellString;
@@ -253,10 +300,8 @@ local dialogs = {
 		completionIcon = false,
 		cautionIcon = true,
 		title = TOKEN_CONFIRMATION_TITLE,
-		description = TOKEN_CONFIRM_GAME_TIME_DESCRIPTION,
-		formatDesc = true,
-		descFormatArgs = function() return {WowTokenRedemptionFrame.timeGranted} end ,
-		confirmationDesc = GetRedeemConfirmationDescription,
+		description = { [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS] = TOKEN_CONFIRM_GAME_TIME_DESCRIPTION, [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES] = TOKEN_CONFIRM_GAME_TIME_DESCRIPTION_MINUTES },
+		confirmationDesc = GetRedemptionString,
 		confDescIsFunction = true,
 		button1 = ACCEPT,
 		button1OnClick = function(self) self:Hide(); C_WowTokenSecure.RedeemTokenConfirm(RedeemedTokenGUID); end,
@@ -268,8 +313,7 @@ local dialogs = {
 		completionIcon = true,
 		cautionIcon = false,
 		title = TOKEN_COMPLETE_TITLE,
-		description = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION,
-		descFormatArgs = function() return { WowTokenRedemptionFrame.timeGranted } end,
+		description = { [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION, [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION_MINUTES },
 		button1 = OKAY,
 		point = { "CENTER", UIParent, "CENTER", 0, 240 },
 	};
@@ -393,8 +437,10 @@ function WowTokenDialog_SetDialog(self, dialogName)
 		self.ConfirmationDesc:SetPoint("TOP", self.Description, "BOTTOM", 0, -spacing);
 		self.Description:SetWidth(0);
 		local description;
-		if (not dialog.formatConfirmationDesc or dialog.formatDesc) then
+		if (dialog.formatDesc) then
 			description = dialog.description:format(unpack(descArgs));
+		elseif (type(description) == "table") then
+			description = dialog.description[RedeemIndex];
 		else
 			description = dialog.description;
 		end

@@ -1401,7 +1401,6 @@ function AuctionFrameAuctions_Update()
 
 			if (C_WowTokenPublic.IsAuctionableWowToken(itemID)) then
 				bidAmount = 0;
-				buyoutPrice = C_WowTokenPublic.GetCurrentMarketPrice();
 			end
 
 			-- Resize button if there isn't a scrollbar

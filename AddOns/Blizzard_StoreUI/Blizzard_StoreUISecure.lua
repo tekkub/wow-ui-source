@@ -135,6 +135,8 @@ Import("BLIZZARD_STORE_ERROR_TITLE_PARENTAL_CONTROLS");
 Import("BLIZZARD_STORE_ERROR_MESSAGE_PARENTAL_CONTROLS");
 Import("BLIZZARD_STORE_ERROR_TITLE_PURCHASE_DENIED");
 Import("BLIZZARD_STORE_ERROR_MESSAGE_PURCHASE_DENIED");
+Import("BLIZZARD_STORE_ERROR_TITLE_CONSUMABLE_TOKEN_OWNED");
+Import("BLIZZARD_STORE_ERROR_MESSAGE_CONSUMABLE_TOKEN_OWNED");
 Import("BLIZZARD_STORE_DISCOUNT_TEXT_FORMAT");
 Import("BLIZZARD_STORE_PAGE_NUMBER");
 Import("BLIZZARD_STORE_SPLASH_BANNER_DISCOUNT_FORMAT");
@@ -146,6 +148,8 @@ Import("BLIZZARD_STORE_BEING_PROCESSED_CHECK_BACK_LATER");
 Import("BLIZZARD_STORE_PURCHASE_SENT");
 Import("BLIZZARD_STORE_YOU_ALREADY_OWN_THIS");
 Import("BLIZZARD_STORE_TOKEN_CURRENT_MARKET_PRICE");
+Import("BLIZZARD_STORE_TOKEN_DESC_30_DAYS");
+Import("BLIZZARD_STORE_TOKEN_DESC_2700_MINUTES");
 Import("ENABLE_COLORBLIND_MODE");
 Import("TOOLTIP_DEFAULT_COLOR");
 Import("TOOLTIP_DEFAULT_BACKGROUND_COLOR");
@@ -156,7 +160,7 @@ Import("CHARACTER_UPGRADE_READY_DESCRIPTION");
 Import("FREE_CHARACTER_UPGRADE_READY");
 Import("FREE_CHARACTER_UPGRADE_READY_DESCRIPTION");
 Import("TOKEN_CURRENT_AUCTION_VALUE");
-
+Import("TOKEN_MARKET_PRICE_NOT_AVAILABLE");
 Import("OKAY");
 Import("LARGE_NUMBER_SEPERATOR");
 Import("DECIMAL_SEPERATOR");
@@ -180,6 +184,10 @@ Import("LE_STORE_ERROR_OTHER");
 Import("LE_STORE_ERROR_ALREADY_OWNED");
 Import("LE_STORE_ERROR_PARENTAL_CONTROLS_NO_PURCHASE");
 Import("LE_STORE_ERROR_PURCHASE_DENIED");
+Import("LE_STORE_ERROR_CONSUMABLE_TOKEN_OWNED");
+Import("LE_TOKEN_RESULT_SUCCESS");
+Import("LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS");
+Import("LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES");
 
 --Data
 local CURRENCY_UNKNOWN = 0;
@@ -218,6 +226,7 @@ local currencyMult = 100;
 local selectedCategoryID;
 local selectedEntryID;
 local selectedPageNum = 1;
+local TokenMarketPriceAvailable = false;
 
 --DECIMAL_SEPERATOR = ",";
 --LARGE_NUMBER_SEPERATOR = ".";
@@ -564,7 +573,11 @@ local errorData = {
 	[LE_STORE_ERROR_PURCHASE_DENIED] = {
 		title = BLIZZARD_STORE_ERROR_TITLE_PURCHASE_DENIED,
 		msg = BLIZZARD_STORE_ERROR_MESSAGE_PURCHASE_DENIED,
-	}	
+	},
+	[LE_STORE_ERROR_CONSUMABLE_TOKEN_OWNED] = {
+		title = BLIZZARD_STORE_ERROR_TITLE_CONSUMABLE_TOKEN_OWNED,
+		msg = BLIZZARD_STORE_ERROR_MESSAGE_CONSUMABLE_TOKEN_OWNED,
+	},
 };
 
 local tooltipSides = {};
@@ -684,18 +697,34 @@ function StoreFrame_UpdateCard(card,entryID,discountReset)
 		end
 
 		if (token) then
-			card.CurrentMarketPrice:SetText(TOKEN_CURRENT_AUCTION_VALUE:format(GetSecureMoneyString(C_WowTokenPublic.GetCurrentMarketPrice(), true)));
+			if (TokenMarketPriceAvailable) then
+				card.CurrentMarketPrice:SetText(TOKEN_CURRENT_AUCTION_VALUE:format(GetSecureMoneyString(C_WowTokenPublic.GetCurrentMarketPrice(), true)));
+			else
+				card.CurrentMarketPrice:SetText(TOKEN_CURRENT_AUCTION_VALUE:format(TOKEN_MARKET_PRICE_NOT_AVAILABLE));
+			end
 			card.CurrentPrice:ClearAllPoints();
 			card.CurrentPrice:SetPoint("TOPLEFT", card.CurrentMarketPrice, "BOTTOMLEFT", 0, -28);
+			card.NormalPrice:ClearAllPoints();
+			card.NormalPrice:SetPoint("TOPLEFT", card.CurrentMarketPrice, "BOTTOMLEFT", 0, -28);
 			card.CurrentMarketPrice:Show();
 		else
 			card.CurrentMarketPrice:Hide();
 			card.CurrentPrice:ClearAllPoints();
 			card.CurrentPrice:SetPoint("TOPLEFT", card.Description, "BOTTOMLEFT", 0, -28);
+			card.NormalPrice:ClearAllPoints();
+			card.NormalPrice:SetPoint("TOPLEFT", card.Description, "BOTTOMLEFT", 0, -28);
 		end
 	end
 	
 	if (card.Description) then
+		if (token) then
+			local redeemIndex = select(3, C_WowTokenPublic.GetCommerceSystemStatus());
+			if (redeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
+				description = BLIZZARD_STORE_TOKEN_DESC_30_DAYS;
+			elseif (redeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES) then
+				description = BLIZZARD_STORE_TOKEN_DESC_2700_MINUTES;
+			end
+		end
 		card.Description:SetText(description);
 	end
 
@@ -934,6 +963,7 @@ function StoreFrame_OnLoad(self)
 	self:RegisterEvent("STORE_PURCHASE_ERROR");
 	self:RegisterEvent("STORE_ORDER_INITIATION_FAILED");
 	self:RegisterEvent("AUTH_CHALLENGE_FINISHED");
+	self:RegisterEvent("TOKEN_MARKET_PRICE_UPDATED");
 
 	-- We have to call this from CharacterSelect on the glue screen because the addon engine will load
 	-- the store addon more than once if we try to make it ondemand, forcing us to load it before we
@@ -1063,12 +1093,19 @@ function StoreFrame_OnEvent(self, event, ...)
 		else
 			StoreStateDriverFrame.NoticeTextTimer:Play();
 		end
+	elseif ( event == "TOKEN_MARKET_PRICE_UPDATED" ) then
+		local result = ...;
+		TokenMarketPriceAvailable = result == LE_TOKEN_RESULT_SUCCESS;
+		if (selectedCategoryID == WOW_TOKEN_CATEGORY_ID) then
+			StoreFrame_SetCategory();
+		end
 	end
 end
 
 function StoreFrame_OnShow(self)
 	JustFinishedOrdering = false;
 	C_PurchaseAPI.GetProductList();
+	C_WowTokenPublic.UpdateMarketPrice();
 	self:SetAttribute("isshown", true);
 	StoreFrame_UpdateActivePanel(self);
 	if ( not IsOnGlueScreen() ) then
@@ -2008,8 +2045,12 @@ function StoreTooltip_Show(name, description, token)
 	StoreTooltip.ProductName:SetText(name);
 
 	if (token) then
-		local price = C_WowTokenPublic.GetCurrentMarketPrice();
-		description = description .. BLIZZARD_STORE_TOKEN_CURRENT_MARKET_PRICE:format(GetSecureMoneyString(price));
+		if (TokenMarketPriceAvailable) then
+			local price = C_WowTokenPublic.GetCurrentMarketPrice();
+			description = description .. BLIZZARD_STORE_TOKEN_CURRENT_MARKET_PRICE:format(GetSecureMoneyString(price));
+		else
+			description = description .. BLIZZARD_STORE_TOKEN_CURRENT_MARKET_PRICE:format(TOKEN_MARKET_PRICE_NOT_AVAILABLE);
+		end
 	end
 	StoreTooltip.Description:SetText(description);
 	

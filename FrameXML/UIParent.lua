@@ -323,6 +323,8 @@ function UIParent_OnLoad(self)
 
 	-- Shop (for Asia promotion)
 	self:RegisterEvent("PRODUCT_DISTRIBUTIONS_UPDATED");
+
+	self:RegisterEvent("TOKEN_AUCTION_SOLD");
 end
 
 
@@ -1636,10 +1638,14 @@ function UIParent_OnEvent(self, event, ...)
 		ShowUIPanel(GarrisonRecruiterFrame);
 	elseif ( event == "PRODUCT_DISTRIBUTIONS_UPDATED" ) then
 		StoreFrame_CheckForFree(event);
-	elseif event == "LOADING_SCREEN_ENABLED" then
+	elseif ( event == "LOADING_SCREEN_ENABLED" ) then
 		TopBannerManager_LoadingScreenEnabled();
-	elseif event == "LOADING_SCREEN_DISABLED" then
+	elseif ( event == "LOADING_SCREEN_DISABLED" ) then
 		TopBannerManager_LoadingScreenDisabled()
+	elseif ( event == "TOKEN_AUCTION_SOLD" ) then
+		local info = ChatTypeInfo["SYSTEM"];
+		local itemName = GetItemInfo(WOW_TOKEN_ITEM_ID);
+		DEFAULT_CHAT_FRAME:AddMessage(ERR_AUCTION_SOLD_S:format(itemName), info.r, info.g, info.b, info.id);
 	end
 end
 

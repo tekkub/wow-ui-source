@@ -634,7 +634,7 @@
 										self.Ring:Hide();
 									</OnLoad>
 									<OnEnter>
-										GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+										GameTooltip:SetOwner(self, "ANCHOR_RIGHT",-22,-22);
 										GameTooltip:SetText(TUTORIAL_TOKEN_ABOUT_TOKENS);
 										GameTooltip:Show();
 									</OnEnter>
@@ -2188,8 +2188,8 @@
 						<Frames>
 							<Frame parentKey="InvisiblePriceFrame" enableMouse="true">
 								<Anchors>
-									<Anchor point="TOPLEFT" relativeKey="$parent.MarketPrice" relativePoint="TOPLEFT"/>
-									<Anchor point="BOTTOMRIGHT" relativeKey="$parent.MarketPrice" relativePoint="BOTTOMRIGHT"/>
+									<Anchor point="TOPLEFT" relativeKey="$parent.BuyoutPriceLabel" relativePoint="TOPLEFT" x="-7" y="7"/>
+									<Anchor point="BOTTOMRIGHT" relativeKey="$parent.MarketPrice" relativePoint="BOTTOMRIGHT" x="7" y="-7"/>
 								</Anchors>
 								<Scripts>
 									<OnEnter>

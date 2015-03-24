@@ -316,15 +316,15 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 
 function GetTimeLeftString()
-	local _, timeToSell = C_WowTokenPublic.GetCurrentMarketPrice();
+	local _, duration = C_WowTokenPublic.GetCurrentMarketPrice();
 	local timeToSellString;
-	if (timeToSell < (30 * 60)) then -- 30 minutes
+	if (duration == 1) then
 		timeToSellString = AUCTION_TIME_LEFT1_DETAIL;
-	elseif (timeToSell < (60 * 60 * 2)) then -- 2 hours
+	elseif (duration == 2) then
 		timeToSellString = AUCTION_TIME_LEFT2_DETAIL;
-	elseif (timeToSell < (60 * 60 * 12)) then -- 12 hours
+	elseif (duration == 3) then
 		timeToSellString = AUCTION_TIME_LEFT3_DETAIL;
-	else -- More than 12 hours
+	else
 		timeToSellString = AUCTION_TIME_LEFT4_DETAIL;
 	end
 	return timeToSellString;
@@ -681,5 +681,10 @@ function WowTokenDialogButton_OnClick(self)
 			currentDialog.onCancelled(WowTokenDialog);
 		end
 		WowTokenDialog:Hide();
+	end
+
+	if (currentTicker) then
+		SecureCancelTicker(currentTicker);
+		currentTicker = nil;
 	end
 end

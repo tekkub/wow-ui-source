@@ -213,12 +213,10 @@ local BATTLEPAY_GROUP_DISPLAY_SPLASH = 1;
 local BATTLEPAY_SPLASH_BANNER_TEXT_FEATURED = 0;
 local BATTLEPAY_SPLASH_BANNER_TEXT_DISCOUNT = 1;
 local BATTLEPAY_SPLASH_BANNER_TEXT_NEW = 2;
-local STORETOOLTIP_MAX_WIDTH = 250;
 local COPPER_PER_SILVER = 100;
 local SILVER_PER_GOLD = 100;
 local COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
 local WOW_TOKEN_CATEGORY_ID = 30;
-
 local PI = math.pi;
 
 local currencyMult = 100;
@@ -592,7 +590,7 @@ local function getIndex(tbl, value)
 end
 
 function StoreFrame_UpdateCard(card,entryID,discountReset)
-	local productID, _, bannerType, alreadyOwned, normalDollars, normalCents, currentDollars, currentCents, buyableHere, name, description, displayID, texture, upgrade, token, itemID = C_PurchaseAPI.GetEntryInfo(entryID);
+	local productID, _, bannerType, alreadyOwned, normalDollars, normalCents, currentDollars, currentCents, buyableHere, name, description, displayID, texture, upgrade, isToken, itemID = C_PurchaseAPI.GetEntryInfo(entryID);
 	StoreProductCard_ResetCornerPieces(card);
 
 	local info = currencyInfo();
@@ -696,7 +694,7 @@ function StoreFrame_UpdateCard(card,entryID,discountReset)
 			card.ProductName:SetFontObject("GameFontNormalHuge3");
 		end
 
-		if (token) then
+		if (isToken) then
 			if (TokenMarketPriceAvailable) then
 				card.CurrentMarketPrice:SetText(TOKEN_CURRENT_AUCTION_VALUE:format(GetSecureMoneyString(C_WowTokenPublic.GetCurrentMarketPrice(), true)));
 			else
@@ -717,7 +715,7 @@ function StoreFrame_UpdateCard(card,entryID,discountReset)
 	end
 	
 	if (card.Description) then
-		if (token) then
+		if (isToken) then
 			local redeemIndex = select(3, C_WowTokenPublic.GetCommerceSystemStatus());
 			if (redeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
 				description = BLIZZARD_STORE_TOKEN_DESC_30_DAYS;
@@ -1207,6 +1205,7 @@ function StoreFrame_OnAttributeChanged(self, name, value)
 		StoreFrame_CheckForFree(self, value);
 	elseif ( name == "settokencategory" ) then
 		StoreFrame_UpdateCategories(StoreFrame);
+		selectedPageNum = 1;
 		selectedCategoryID = WOW_TOKEN_CATEGORY_ID;
 		StoreFrame_SetCategory();
 	end
@@ -1235,7 +1234,7 @@ function StoreFrame_UpdateActivePanel(self)
 		if (StoreStateDriverFrame.NoticeTextTimer:IsPlaying()) then --Even if we don't have every list, if we know we have something in progress, we can display that.
 			progressText = BLIZZARD_STORE_PROCESSING
 		else
-			progressText = BLIZZARD_STORE_CHECK_BACK_LATER
+			progressText = BLIZZARD_STORE_BEING_PROCESSED_CHECK_BACK_LATER
 		end
 		StoreFrame_SetAlert(self, BLIZZARD_STORE_TRANSACTION_IN_PROGRESS, progressText);
 	elseif ( JustFinishedOrdering ) then
@@ -1629,11 +1628,11 @@ function StoreProductCard_UpdateState(card)
 					xoffset = -4;
 				end
 				local entryID = card:GetID();
-				local name, description, _, _, _, token = select(10,C_PurchaseAPI.GetEntryInfo(entryID));
+				local name, description, _, _, _, isToken = select(10,C_PurchaseAPI.GetEntryInfo(entryID));
 				
 				StoreTooltip:ClearAllPoints();
 				StoreTooltip:SetPoint(point, card, rpoint, xoffset, 0);
-				StoreTooltip_Show(name, description, token);
+				StoreTooltip_Show(name, description, isToken);
 			end
 		end
 	end
@@ -1800,7 +1799,7 @@ local cardModels = {}
 function StoreProductCard_SetModel(self, modelID, owned)
 	self.IconBorder:Hide();
 	self.Icon:Hide();
-	self.InvisibleIconFrame:Hide();
+	self.InvisibleMouseOverFrame:Hide();
 
 	if (self.GlowSpin) then
 		self.GlowSpin:Hide();
@@ -1844,9 +1843,9 @@ function StoreProductCard_ShowIcon(self, icon, itemID)
 	self.IconBorder:Show();
 	self.Icon:Show();
 	if (itemID) then
-		self.InvisibleIconFrame:Show();
+		self.InvisibleMouseOverFrame:Show();
 	else
-		self.InvisibleIconFrame:Hide();
+		self.InvisibleMouseOverFrame:Hide();
 	end
 
 	SetPortraitToTexture(self.Icon, icon);
@@ -2034,9 +2033,9 @@ function StoreTooltip_OnLoad(self)
 	self:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b, 0.9);
 end
 
-function StoreTooltip_Show(name, description, token)
+function StoreTooltip_Show(name, description, isToken)
 	local self = StoreTooltip;
-	STORETOOLTIP_MAX_WIDTH = token and 300 or 250;
+	local STORETOOLTIP_MAX_WIDTH = isToken and 300 or 250;
 	local stringMaxWidth = STORETOOLTIP_MAX_WIDTH - 20;
 	self.ProductName:SetWidth(stringMaxWidth);
 	self.Description:SetWidth(stringMaxWidth);
@@ -2044,7 +2043,7 @@ function StoreTooltip_Show(name, description, token)
 	self:Show();
 	StoreTooltip.ProductName:SetText(name);
 
-	if (token) then
+	if (isToken) then
 		if (TokenMarketPriceAvailable) then
 			local price = C_WowTokenPublic.GetCurrentMarketPrice();
 			description = description .. BLIZZARD_STORE_TOKEN_CURRENT_MARKET_PRICE:format(GetSecureMoneyString(price));

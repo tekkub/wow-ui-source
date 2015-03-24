@@ -804,6 +804,7 @@ function AuctionFrameFilter_OnClick(self, button)
 				WowTokenGameTimeTutorial:Show();
 				SetCVarBitfield("closedInfoFrames", LE_FRAME_TUTORIAL_GAME_TIME_AUCTION_HOUSE, true);
 			end
+			BrowseWowTokenResults:Show();
 			AuctionWowToken_UpdateMarketPrice();
 			BrowseBidButton:Hide();
 			BrowseBuyoutButton:Hide();
@@ -1093,8 +1094,10 @@ function BrowseWowTokenResults_OnEvent(self, event, ...)
 						GameTooltip:Hide();
 					else
 						self.Buyout.tooltip = TOKEN_TRY_AGAIN_LATER:format(INT_SPELL_DURATION_SEC:format(self.remaining));
-						if (GameTooltip:IsShown()) then
+						if (GameTooltip:IsShown() and self.Buyout:IsVisible() and GameTooltip:GetOwner() == self.Buyout) then
 							GameTooltip:SetText(self.Buyout.tooltip);
+						elseif (GameTooltip:GetOwner() == self.Buyout) then
+							GameTooltip:Hide();
 						end
 					end
 					self.remaining = self.remaining - 1;
@@ -1113,6 +1116,7 @@ function BrowseWowTokenResults_OnEvent(self, event, ...)
 			local info = ChatTypeInfo["SYSTEM"];
 			local itemName = GetItemInfo(WOW_TOKEN_ITEM_ID);
 			DEFAULT_CHAT_FRAME:AddMessage(ERR_AUCTION_WON_S:format(itemName), info.r, info.g, info.b, info.id);
+			C_WowTokenPublic.UpdateTokenCount();
 		end
 	elseif ( event == "PLAYER_MONEY" ) then
 		BrowseWowTokenResults_Update();
@@ -1127,7 +1131,12 @@ end
 
 function BrowseWowTokenResults_Update()
 	if (AuctionFrameBrowse.selectedClass == TOKEN_FILTER_LABEL) then
-		local marketPrice = C_WowTokenPublic.GetCurrentMarketPrice();
+		local marketPrice;
+		if (WowToken_IsWowTokenAuctionDialogShown()) then
+			marketPrice = C_WowTokenPublic.GetGuaranteedPrice();
+		else
+			marketPrice = C_WowTokenPublic.GetCurrentMarketPrice();
+		end
 		BrowseWowTokenResults:Show();
 		local itemName, _, itemQuality, _, _, _, _, _, _, itemTexture = GetItemInfo(WOW_TOKEN_ITEM_ID);
 		if (itemName) then
@@ -1575,8 +1584,10 @@ function AuctionFrameAuctions_Update()
 			else
 				-- Normal item
 				itemName:SetText(name);
-				itemName:SetVertexColor(color.r, color.g, color.b);
-				
+				if (color) then
+					itemName:SetVertexColor(color.r, color.g, color.b);
+				end
+
 				highBidderFrame.fullName = bidderFullName;
 				if ( isWowToken ) then
 					highBidder = DISABLED_FONT_COLOR_CODE..NOT_APPLICABLE..FONT_COLOR_CODE_CLOSE;
@@ -2019,6 +2030,9 @@ end
 
 function AuctionsWowTokenAuctionFrame_Update()
 	local price, duration = C_WowTokenPublic.GetCurrentMarketPrice();
+	if (WowToken_IsWowTokenAuctionDialogShown()) then
+		price = C_WowTokenPublic.GetGuaranteedPrice();
+	end
 	if (AuctionsWowTokenAuctionFrame.marketPriceAvailable) then
 		AuctionsWowTokenAuctionFrame.MarketPrice:SetText(GetMoneyString(price, true));
 		local timeToSellString = _G[("AUCTION_TIME_LEFT%d_DETAIL"):format(duration)];
@@ -2031,7 +2045,7 @@ end
 
 function AuctionWowToken_UpdateMarketPrice()
 	C_WowTokenPublic.UpdateMarketPrice();
-	if (BrowseWowTokenResults:IsShown() or AuctionsWowTokenAuctionFrame:IsShown()) then
+	if ((BrowseWowTokenResults:IsVisible() or AuctionsWowTokenAuctionFrame:IsVisible()) and not WowToken_IsWowTokenAuctionDialogShown()) then
 		local _, pollTimeSeconds = C_WowTokenPublic.GetCommerceSystemStatus();
 		if (not AuctionFrame.priceUpdateTimer or pollTimeSeconds ~= AuctionFrame.priceUpdateTimer.pollTimeSeconds) then
 			if (AuctionFrame.priceUpdateTimer) then

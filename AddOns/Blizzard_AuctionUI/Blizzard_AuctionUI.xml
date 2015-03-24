@@ -2162,7 +2162,7 @@
 						</Anchors>
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString parentKey="BuyoutPriceLabel" inherits="GameFontNormalSmall" text="BUYOUT_PRICE" justifyH="LEFT">
+								<FontString parentKey="BuyoutPriceLabel" inherits="GameFontNormalSmall" text="TOKEN_CURRENT_MARKET_PRICE" justifyH="LEFT">
 									<Anchors>
 										<Anchor point="TOPLEFT" x="6" y="-28"/>
 									</Anchors>
@@ -2188,12 +2188,12 @@
 						<Frames>
 							<Frame parentKey="InvisiblePriceFrame" enableMouse="true">
 								<Anchors>
-									<Anchor point="TOPLEFT" relativeKey="$parent.BuyoutPriceLabel" relativePoint="TOPLEFT" x="-7" y="7"/>
-									<Anchor point="BOTTOMRIGHT" relativeKey="$parent.MarketPrice" relativePoint="BOTTOMRIGHT" x="7" y="-7"/>
+									<Anchor point="TOPLEFT" relativePoint="TOPLEFT" x="-7" y="7"/>
+									<Anchor point="BOTTOMRIGHT" relativePoint="BOTTOMRIGHT" x="7" y="-7"/>
 								</Anchors>
 								<Scripts>
 									<OnEnter>
-										GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+										GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -100, -50);
 										GameTooltip:SetText(TOKEN_CREATE_AUCTION_LOCKED_PRICE, nil, nil, nil, nil, true);
 										GameTooltip:Show();
 									</OnEnter>

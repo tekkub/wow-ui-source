@@ -7,3 +7,7 @@ tbl = nil;	--This file shouldn't be calling back into secure code.
 function Outbound.RedeemFailed(result)
 	securecall("RedeemFailed", result);
 end
+
+function Outbound.AuctionWowTokenUpdate()
+	securecall("AuctionWowToken_UpdateMarketPrice");
+end

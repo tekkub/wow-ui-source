@@ -187,7 +187,6 @@ function WowTokenRedemptionFrame_OnEvent(self, event, ...)
 		C_WowTokenSecure.GetRemainingGameTime();
 		self.Display.Format:Hide();
 		self.Display.Spinner:Show();
-		
 		self:Show();
 	elseif (event == "TOKEN_REDEEM_GAME_TIME_UPDATED") then
 		if (RedeemIndex == LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS) then
@@ -205,6 +204,21 @@ function WowTokenRedemptionFrame_OnEvent(self, event, ...)
 	end
 end
 
+function WowTokenRedemptionFrame_OnAttributeChanged(self, name, value)
+	--Note - Setting attributes is how the external UI should communicate with this frame. That way, their taint won't be spread to this code.
+	if ( name == "action" ) then
+		if ( value == "EscapePressed" ) then
+			local handled = false;
+			if ( self:IsShown() ) then
+				C_WowTokenSecure.CancelRedeem();
+				self:Hide();
+				handled = true;
+			end
+			self:SetAttribute("escaperesult", handled);
+		end
+	end
+end
+
 function WowTokenRedemptionRedeemButton_OnClick(self)
 	WowTokenRedemptionFrame:Hide();
 	C_WowTokenSecure.RedeemToken();
@@ -214,6 +228,7 @@ end
 function WowTokenRedemptionFrameCloseButton_OnClick(self)
 	C_WowTokenSecure.CancelRedeem();
 	WowTokenRedemptionFrame:Hide();
+	PlaySound("igMainMenuClose");
 end
 
 local function formatLargeNumber(amount)
@@ -348,7 +363,16 @@ local dialogs = {
 		end,
 		confDescIsFunction = true,
 		button1 = ACCEPT,
-		button1OnClick = function(self) self:Hide(); C_WowTokenSecure.RedeemTokenConfirm(); WowTokenDialog_SetDialog(WowTokenDialog, "WOW_TOKEN_REDEEM_IN_PROGRESS") PlaySound("igMainMenuClose"); end,
+		button1OnClick = function(self) 
+			self:Hide(); 
+			if (C_WowTokenSecure.GetTokenCount() > 0) then 
+				C_WowTokenSecure.RedeemTokenConfirm(); 
+				WowTokenDialog_SetDialog(WowTokenDialog, "WOW_TOKEN_REDEEM_IN_PROGRESS"); 
+			else
+				Outbound.RedeemFailed(LE_TOKEN_RESULT_ERROR_OTHER);
+			end
+			PlaySound("igMainMenuClose"); 
+		end,
 		button2 = CANCEL,
 		button2OnClick = function(self) self:Hide(); C_WowTokenSecure.CancelRedeem(); PlaySound("igMainMenuClose"); end,
 		point = { "CENTER", UIParent, "CENTER", 0, 240 },
@@ -359,6 +383,7 @@ local dialogs = {
 		title = TOKEN_COMPLETE_TITLE,
 		description = { [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION, [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION_MINUTES },
 		button1 = OKAY,
+		button1OnClick = function(self) self:Hide(); PlaySound("igMainMenuClose"); end,
 		point = { "CENTER", UIParent, "CENTER", 0, 240 },
 	};
 	["WOW_TOKEN_REDEEM_COMPLETION_KICK"] = {
@@ -366,6 +391,7 @@ local dialogs = {
 		description = { [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_30_DAYS] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION, [LE_CONSUMABLE_TOKEN_REDEEM_FOR_SUB_AMOUNT_2700_MINUTES] = TOKEN_COMPLETE_GAME_TIME_DESCRIPTION_MINUTES },
 		confirmationDesc = TOKEN_YOU_WILL_BE_LOGGED_OUT,
 		button1 = OKAY,
+		button1OnClick = function(self) self:Hide(); PlaySound("igMainMenuClose"); end,
 		point = { "CENTER", UIParent, "CENTER", 0, 240 },
 	};
 	["WOW_TOKEN_CREATE_AUCTION"] = {
@@ -374,11 +400,18 @@ local dialogs = {
 		title = TOKEN_CREATE_AUCTION_TITLE,
 		confirmationDesc = TOKEN_CONFIRM_CREATE_AUCTION,
 		formatConfirmationDesc = true,
-		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenSecure.GetGuaranteedPrice(), true), GetTimeLeftString() } end,
+		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenPublic.GetGuaranteedPrice(), true), GetTimeLeftString() } end,
 		button1 = CREATE_AUCTION,
 		button1OnClick = function(self) C_WowTokenSecure.ConfirmSellToken(true); self:Hide(); PlaySound("LOOTWINDOWCOINSOUND"); end,
 		button2 = CANCEL,
-		button2OnClick = function(self) C_WowTokenSecure.ConfirmSellToken(false); self:Hide(); end,
+		button2OnClick = function(self) C_WowTokenSecure.ConfirmSellToken(false); self:Hide(); PlaySound("igMainMenuClose"); end,
+		onShow = function(self)
+			self:SetAttribute("isauctiondialogshown", true);
+		end,
+		onHide = function(self)
+			self:SetAttribute("isauctiondialogshown", false);
+			Outbound.AuctionWowTokenUpdate();
+		end,
 		onCancelled = function(self)
 			C_WowTokenSecure.ConfirmSellToken(false);
 			PlaySound("igMainMenuClose");
@@ -393,12 +426,15 @@ local dialogs = {
 		title = TOKEN_BUYOUT_AUCTION_TITLE,
 		confirmationDesc = TOKEN_BUYOUT_AUCTION_CONFIRMATION_DESCRIPTION;
 		formatConfirmationDesc = true,
-		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenSecure.GetGuaranteedPrice(), true); } end,
+		confDescFormatArgs = function() return { GetSecureMoneyString(C_WowTokenPublic.GetGuaranteedPrice(), true); } end,
 		onShow = function(self)
+			self:SetAttribute("isauctiondialogshown", true);
 			self.Title:SetFontObject("GameFontHighlight");
 			self.ConfirmationDesc:SetFontObject("GameFontHighlight");
 		end,
 		onHide = function(self)
+			self:SetAttribute("isauctiondialogshown", false);
+			Outbound.AuctionWowTokenUpdate();
 			self.Title:SetFontObject("GameFontNormalLarge");
 			self.ConfirmationDesc:SetFontObject("GameFontNormal");
 		end,
@@ -435,9 +471,7 @@ function WowTokenDialog_SetDialog(self, dialogName)
 	if (self:IsShown() and currentDialog == dialog) then
 		return;
 	else
-		if (currentDialog and currentDialog.onHide) then
-			currentDialog.onHide(self);
-		end
+		self:Hide();
 		currentDialog = dialog;
 		currentDialogName = dialogName;
 	end
@@ -459,9 +493,6 @@ function WowTokenDialog_SetDialog(self, dialogName)
 	end
 
 	self:Show();
-	if (currentDialog.onShow) then
-		currentDialog.onShow(self);
-	end
 
 	local width = 256;
 	local height = dialog.baseHeight or 54;
@@ -628,6 +659,11 @@ end
 
 function WowTokenDialog_HideDialog(dialogName)
 	if (currentDialog and currentDialogName == dialogName) then
+		if (dialogName == "WOW_TOKEN_CREATE_AUCTION") then
+			C_WowTokenSecure.ConfirmSellToken(false);
+		elseif (dialogName == "WOW_TOKEN_BUYOUT_AUCTION") then
+			C_WowTokenSecure.ConfirmBuyToken(false);
+		end
 		WowTokenDialog:Hide();
 	end
 end
@@ -640,11 +676,34 @@ function WowTokenDialog_OnLoad(self)
 	self:RegisterEvent("AUCTION_HOUSE_CLOSED");
 end
 
+function WowTokenDialog_OnShow(self)
+	if (currentDialog and currentDialog.onShow) then
+		currentDialog.onShow(self);
+	end
+end
+
+function WowTokenDialog_OnHide(self)
+	if (currentDialog and currentDialog.onHide) then
+		currentDialog.onHide(self);
+	end
+
+	if (self:IsShown()) then
+		if (currentDialog.onCancelled) then
+			currentDialog.onCancelled(self);
+		end
+		self:Hide();
+	end
+
+	currentDialog = nil;
+end
+
 function WowTokenDialog_OnEvent(self, event, ...)
 	if (event == "TOKEN_SELL_CONFIRM_REQUIRED") then
 		WowTokenDialog_SetDialog(self, "WOW_TOKEN_CREATE_AUCTION");
+		Outbound.AuctionWowTokenUpdate();
 	elseif (event == "TOKEN_BUY_CONFIRM_REQUIRED") then
 		WowTokenDialog_SetDialog(self, "WOW_TOKEN_BUYOUT_AUCTION");
+		Outbound.AuctionWowTokenUpdate();
 	elseif (event == "TOKEN_REDEEM_CONFIRM_REQUIRED") then
 		WowTokenDialog_SetDialog(self, "WOW_TOKEN_REDEEM_CONFIRMATION");
 	elseif (event == "TOKEN_REDEEM_RESULT") then

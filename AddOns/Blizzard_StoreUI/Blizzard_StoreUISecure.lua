@@ -30,6 +30,7 @@ Import("C_PurchaseAPI");
 Import("C_PetJournal");
 Import("C_SharedCharacterServices");
 Import("C_AuthChallenge");
+Import("C_Timer");
 Import("C_WowTokenPublic");
 Import("CreateForbiddenFrame");
 Import("IsGMClient");
@@ -809,7 +810,7 @@ function StoreFrame_SetSplashCategory()
 	local isThreeSplash = #products >= 3;
 
 	StoreFrame_CheckAndUpdateEntryID(true, isThreeSplash);
-
+	
 	if (isThreeSplash) then
 		self.SplashSingle:Hide();
 		StoreFrame_UpdateCard(self.SplashPrimary, products[1]);
@@ -887,6 +888,7 @@ function StoreFrame_SetCategory()
 	else
 		StoreFrame_SetNormalCategory();
 	end
+	StoreFrame_CheckMarketPriceUpdates();
 end
 
 function StoreFrame_CreateCards(self, num, numPerRow)
@@ -962,6 +964,7 @@ function StoreFrame_OnLoad(self)
 	self:RegisterEvent("STORE_ORDER_INITIATION_FAILED");
 	self:RegisterEvent("AUTH_CHALLENGE_FINISHED");
 	self:RegisterEvent("TOKEN_MARKET_PRICE_UPDATED");
+	self:RegisterEvent("TOKEN_STATUS_CHANGED");
 
 	-- We have to call this from CharacterSelect on the glue screen because the addon engine will load
 	-- the store addon more than once if we try to make it ondemand, forcing us to load it before we
@@ -1097,6 +1100,8 @@ function StoreFrame_OnEvent(self, event, ...)
 		if (selectedCategoryID == WOW_TOKEN_CATEGORY_ID) then
 			StoreFrame_SetCategory();
 		end
+	elseif ( event == "TOKEN_STATUS_CHANGED" ) then
+		StoreFrame_CheckMarketPriceUpdates();
 	end
 end
 
@@ -2124,4 +2129,62 @@ end
 function ServicesLogoutPopupCancelButton_OnClick(self)
 	PlaySound("igMainMenuOptionCheckBoxOn");
 	ServicesLogoutPopup:Hide();
+end
+
+--------------------------------------
+local priceUpdateTimer, currentPollTimeSeconds;
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+-- This code is replicated from C_TimerAugment.lua to ensure that the timers are secure.
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--Cancels a ticker or timer. May be safely called within the ticker's callback in which
+--case the ticker simply won't be started again.
+--Cancel is guaranteed to be idempotent.
+function SecureCancelTicker(ticker)
+	ticker._cancelled = true;
+end
+
+function NewSecureTicker(duration, callback, iterations)
+	local ticker = {};
+	ticker._remainingIterations = iterations;
+	ticker._callback = function()
+		if ( not ticker._cancelled ) then
+			callback(ticker);
+
+			--Make sure we weren't cancelled during the callback
+			if ( not ticker._cancelled ) then
+				if ( ticker._remainingIterations ) then
+					ticker._remainingIterations = ticker._remainingIterations - 1;
+				end
+				if ( not ticker._remainingIterations or ticker._remainingIterations > 0 ) then
+					C_Timer.After(duration, ticker._callback);
+				end
+			end
+		end
+	end;
+
+	C_Timer.After(duration, ticker._callback);
+	return ticker;
+end
+
+function StoreFrame_UpdateMarketPrice()
+	C_WowTokenPublic.UpdateMarketPrice();
+end
+
+function StoreFrame_CheckMarketPriceUpdates()
+	if (StoreFrame:IsShown() and selectedCategoryID == WOW_TOKEN_CATEGORY_ID) then
+		C_WowTokenPublic.UpdateMarketPrice();
+		local _, pollTimeSeconds = C_WowTokenPublic.GetCommerceSystemStatus();
+		if (not priceUpdateTimer or pollTimeSeconds ~= currentPollTimeSeconds) then
+			if (priceUpdateTimer) then
+				SecureCancelTicker(priceUpdateTimer);
+			end
+			priceUpdateTimer = NewSecureTicker(pollTimeSeconds, StoreFrame_UpdateMarketPrice);
+			currentPollTimeSeconds = pollTimeSeconds;
+		end
+	else
+		if (priceUpdateTimer) then
+			SecureCancelTicker(priceUpdateTimer);
+		end
+	end
 end

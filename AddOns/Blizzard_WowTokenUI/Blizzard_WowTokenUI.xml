@@ -1,5 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 ..\FrameXML\UI.xsd">
+	<Script file="Blizzard_WowTokenUIInbound.lua" />
 	<Script file="Blizzard_WowTokenUI.lua"/>
 	<Script file="Blizzard_WowTokenUIOutbound.lua"/>
 	<ScopedModifier forbidden="true" scriptsUseGivenEnv="true">
@@ -163,6 +164,7 @@
 			<Scripts>
 				<OnLoad function="WowTokenRedemptionFrame_OnLoad"/>
 				<OnEvent function="WowTokenRedemptionFrame_OnEvent"/>
+				<OnAttributeChanged function="WowTokenRedemptionFrame_OnAttributeChanged"/>
 			</Scripts>
 		</Frame>
 		<Frame name="WowTokenDialog" parent="UIParent" frameStrata="DIALOG" toplevel="true" enableMouse="true" hidden="true">
@@ -259,6 +261,8 @@
 			<Scripts>
 				<OnLoad function="WowTokenDialog_OnLoad"/>
 				<OnEvent function="WowTokenDialog_OnEvent"/>
+				<OnShow function="WowTokenDialog_OnShow"/>
+				<OnHide function="WowTokenDialog_OnHide"/>
 			</Scripts>
 		</Frame>
 	</ScopedModifier>

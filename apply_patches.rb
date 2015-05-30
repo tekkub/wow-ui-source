@@ -3,7 +3,7 @@
 Dir["/Users/tekkub/Downloads/*.diff*"].each do |f|
   /\d\.\d\.\d\.(?<before>\d+)-(\d\.\d\.\d\.)?(?<after>\d+)\.diff/ =~ f
   puts "\n~~~~~~~~~~~~~~ Applying build #{after} ~~~~~~~~~~~~~~"
-  puts `git apply "#{f}"`
+  puts `git apply --ignore-whitespace "#{f}"`
   puts `git add .`
   puts `git commit -m 'Build #{after}'`
 end

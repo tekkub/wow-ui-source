@@ -64,7 +64,7 @@ UIPanelWindows["QuestChoiceFrame"] =			{ area = "center",			pushable = 0, 		xoff
 UIPanelWindows["GarrisonBuildingFrame"] =		{ area = "center",			pushable = 0,		whileDead = 1, 		width = 1002, 	allowOtherPanels = 1};
 UIPanelWindows["GarrisonMissionFrame"] =		{ area = "center",			pushable = 0,		whileDead = 1, 		checkFit = 1,	allowOtherPanels = 1, extraWidth = 20,	extraHeight = 100 };
 UIPanelWindows["GarrisonShipyardFrame"] =		{ area = "center",			pushable = 0,		whileDead = 1, 		checkFit = 1,	allowOtherPanels = 1, extraWidth = 20,	extraHeight = 100 };
-UIPanelWindows["GarrisonLandingPage"] =			{ area = "center",			pushable = 0,		whileDead = 1, 		width = 800, 	allowOtherPanels = 1};
+UIPanelWindows["GarrisonLandingPage"] =			{ area = "left",			pushable = 1,		whileDead = 1, 		width = 830, 	yoffset = 9,	allowOtherPanels = 1};
 UIPanelWindows["GarrisonMonumentFrame"] =		{ area = "center",			pushable = 0,		whileDead = 1, 		width = 333, 	allowOtherPanels = 1};
 UIPanelWindows["GarrisonRecruiterFrame"] =		{ area = "left",			pushable = 0};
 UIPanelWindows["GarrisonRecruitSelectFrame"] =	{ area = "center",			pushable = 0};
@@ -634,7 +634,7 @@ function ToggleGuildFrame()
 	end
 
 	if ( IsTrialAccount() or (IsVeteranTrialAccount() and not IsInGuild()) ) then
-		UIErrorsFrame:AddMessage(GameLimitedMode_GetString("ERR_RESTRICTED_ACCOUNT"), 1.0, 0.1, 0.1, 1.0);
+		UIErrorsFrame:AddMessage(ERR_RESTRICTED_ACCOUNT_TRIAL, 1.0, 0.1, 0.1, 1.0);
 		return;
 	end
 	if ( IsInGuild() ) then
@@ -825,22 +825,29 @@ end
 function UIParent_OnEvent(self, event, ...)
 	local arg1, arg2, arg3, arg4, arg5, arg6 = ...;
 	if ( event == "CURRENT_SPELL_CAST_CHANGED" ) then
-		if ( SpellCanTargetGarrisonFollower() ) then
+		if ( SpellCanTargetGarrisonFollower() or SpellCanTargetGarrisonFollowerAbility(0, 0) ) then
 			if ( not GarrisonLandingPage ) then
 				Garrison_LoadUI();
 			end
+			local frame = GarrisonMissionFrame;
+			local landingPageTabIndex = 2;
+			local followerTypeID = GetFollowerTypeIDFromSpell();
+			if ( followerTypeID == LE_FOLLOWER_TYPE_SHIPYARD_6_2 ) then
+				frame = GarrisonShipyardFrame;
+				landingPageTabIndex = 3;
+			end
 			-- if the mission UI is already open, go with that
-			if ( GarrisonMissionFrame:IsShown() ) then
-				if ( (not C_Garrison.TargetSpellHasFollowerTemporaryAbility() or not GarrisonMissionPage_HasMission()) and PanelTemplates_GetSelectedTab(GarrisonMissionFrame) ~= 2 ) then
-					GarrisonMissionFrame_SelectTab(2);
+			if ( frame:IsShown() ) then
+				if ( (not C_Garrison.TargetSpellHasFollowerTemporaryAbility() or not frame:HasMission()) and PanelTemplates_GetSelectedTab(frame) ~= 2 ) then
+					frame:SelectTab(2)
 				end
 			else
 				if ( not GarrisonLandingPage:IsShown()) then
 					ShowUIPanel(GarrisonLandingPage);
 				end
 				-- switch to the followers tab
-				if ( PanelTemplates_GetSelectedTab(GarrisonLandingPage) ~= 2 ) then
-					GarrisonLandingPageTab_OnClick(GarrisonLandingPageTab2);
+				if ( PanelTemplates_GetSelectedTab(GarrisonLandingPage) ~= landingPageTabIndex ) then
+					GarrisonLandingPageTab_SetTab(_G["GarrisonLandingPageTab"..landingPageTabIndex]);
 				end
 			end
 		end
@@ -862,7 +869,7 @@ function UIParent_OnEvent(self, event, ...)
 				end
 				-- switch to the mission tab
 				if ( PanelTemplates_GetSelectedTab(GarrisonLandingPage) ~= 1 ) then
-					GarrisonLandingPageTab_OnClick(GarrisonLandingPageTab1);
+					GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1);
 				end
 				if ( PanelTemplates_GetSelectedTab(GarrisonLandingPageReport) ~= GarrisonLandingPageReport.InProgress ) then
 					GarrisonLandingPageReport_SetTab(GarrisonLandingPageReport.InProgress);
@@ -1724,6 +1731,11 @@ function UpdateMenuBarTop ()
 	end
 end
 
+UIPARENT_ALTERNATE_FRAME_POSITIONS = {
+	["PlayerPowerBarAlt_Bottom"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1};
+	["PlayerPowerBarAlt_Top"] = {baseY = -30, anchorTo = "UIParent", point = "TOP", rpoint = "TOP"};
+}
+
 UIPARENT_MANAGED_FRAME_POSITIONS = {
 	--Items with baseY set to "true" are positioned based on the value of menuBarTop and their offset needs to be repeatedly evaluated as menuBarTop can change. 
 	--"yOffset" gets added to the value of "baseY", which is used for values based on menuBarTop.
@@ -1736,7 +1748,7 @@ UIPARENT_MANAGED_FRAME_POSITIONS = {
 	["FramerateLabel"] = {baseY = true, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1};
 	["ArcheologyDigsiteProgressBar"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1, castingBar = 1};
 	["CastingBarFrame"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, playerPowerBarAlt = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1};
-	["PlayerPowerBarAlt"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1, draenorZoneAbilityFrame = 1};
+	["PlayerPowerBarAlt"] = UIPARENT_ALTERNATE_FRAME_POSITIONS["PlayerPowerBarAlt_Bottom"];
 	["ExtraActionBarFrame"] = {baseY = true, yOffset = 40, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1};
 	["DraenorZoneAbilityFrame"] = {baseY = true, yOffset = 100, bottomEither = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, tutorialAlert = 1, extraActionBarFrame = 1};
 	["ChatFrame1"] = {baseY = true, yOffset = 40, bottomLeft = actionBarOffset-8, justBottomRightAndStance = actionBarOffset, overrideActionBar = overrideActionBarTop, petBattleFrame = petBattleTop, bonusActionBar = 1, pet = 1, reputation = 1, maxLevel = 1, point = "BOTTOMLEFT", rpoint = "BOTTOMLEFT", xOffset = 32};
@@ -1824,10 +1836,6 @@ function UIParent_ManageFramePosition(index, value, yOffsetFrames, xOffsetFrames
 	-- the bottom right bar shown and not the bottom left
 	if ( hasBottomEitherFlag and hasBottomRight and hasPetBar and not hasBottomLeft ) then
 		yOffset = yOffset - (value["pet"] or 0);
-	end
-
-	if ( value["overrideY"] ) then
-		yOffset = value["overrideY"];
 	end
 
 	-- Iterate through frames that affect x offsets
@@ -2340,6 +2348,14 @@ function FramePositionDelegate:UIParentManageFramePositions()
 	-- Set up flags
 	local hasBottomLeft, hasBottomRight, hasPetBar;
 	
+	if ( PlayerPowerBarAlt:IsShown() and select(10, UnitAlternatePowerInfo(PlayerPowerBarAlt.unit)) ) then
+		PlayerPowerBarAlt:ClearAllPoints();
+		UIPARENT_MANAGED_FRAME_POSITIONS["PlayerPowerBarAlt"] = UIPARENT_ALTERNATE_FRAME_POSITIONS["PlayerPowerBarAlt_Top"];
+	else
+		PlayerPowerBarAlt:ClearAllPoints();
+		UIPARENT_MANAGED_FRAME_POSITIONS["PlayerPowerBarAlt"] = UIPARENT_ALTERNATE_FRAME_POSITIONS["PlayerPowerBarAlt_Bottom"];
+	end
+	
 	if ( OverrideActionBar and OverrideActionBar:IsShown() ) then
 		tinsert(yOffsetFrames, "overrideActionBar");
 	elseif ( PetBattleFrame and PetBattleFrame:IsShown() ) then
@@ -2400,12 +2416,6 @@ function FramePositionDelegate:UIParentManageFramePositions()
 		UIPARENT_MANAGED_FRAME_POSITIONS["TutorialFrameAlertButton"].yOffset = -10;
 	else
 		UIPARENT_MANAGED_FRAME_POSITIONS["TutorialFrameAlertButton"].yOffset = -30;
-	end
-	
-	if ( PlayerPowerBarAlt:IsShown() and select(10, UnitAlternatePowerInfo(PlayerPowerBarAlt.unit)) ) then
-		UIPARENT_MANAGED_FRAME_POSITIONS["PlayerPowerBarAlt"].overrideY = UIParent:GetTop() - PlayerPowerBarAlt:GetHeight() - 20;
-	else
-		UIPARENT_MANAGED_FRAME_POSITIONS["PlayerPowerBarAlt"].overrideY = nil;
 	end
 
 	-- Iterate through frames and set anchors according to the flags set
@@ -4285,9 +4295,9 @@ function TrialAccountCapReached_Inform(capType)
 	
 	local info = ChatTypeInfo.SYSTEM;
 	if ( capType == "level" ) then
-		DEFAULT_CHAT_FRAME:AddMessage(GameLimitedMode_GetString("CAPPED_LEVEL"), info.r, info.g, info.b);
+		DEFAULT_CHAT_FRAME:AddMessage(CAPPED_LEVEL_TRIAL, info.r, info.g, info.b);
 	elseif ( capType == "money" ) then
-		DEFAULT_CHAT_FRAME:AddMessage(GameLimitedMode_GetString("CAPPED_MONEY"), info.r, info.g, info.b);
+		DEFAULT_CHAT_FRAME:AddMessage(CAPPED_MONEY_TRIAL, info.r, info.g, info.b);
 	end
 	displayedCapMessage = true;
 end

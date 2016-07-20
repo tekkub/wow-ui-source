@@ -61,6 +61,18 @@ function BlackMarketFrame_OnShow(self)
 	self.HotDeal:Hide();
 	C_BlackMarket.RequestItems();
 	MoneyInputFrame_SetCopper(BlackMarketBidPrice, 0);
+	if( C_BlackMarket.IsViewOnly() ) then
+		BlackMarketFrame.BidButton:Hide();
+		BlackMarketBidPrice:Hide();
+		BlackMarketMoneyFrame:Hide();
+		BlackMarketFrame.MoneyFrameBorder:Hide();
+	else
+		BlackMarketFrame.BidButton:Show();
+		BlackMarketBidPrice:Show();
+		BlackMarketMoneyFrame:Show();
+		BlackMarketFrame.MoneyFrameBorder:Show();
+	end
+
 	BlackMarketFrame.BidButton:Disable();
 	PlaySound("AuctionWindowOpen");
 end
@@ -71,7 +83,7 @@ function BlackMarketFrame_OnHide(self)
 end
 
 function BlackMarketFrame_UpdateHotItem(self)
-	local name, texture, quantity, itemType, usable, level, levelType, sellerName, minBid, minIncrement, currBid, youHaveHighBid, numBids, timeLeft, link, marketID = C_BlackMarket.GetHotItem();
+	local name, texture, quantity, itemType, usable, level, levelType, sellerName, minBid, minIncrement, currBid, youHaveHighBid, numBids, timeLeft, link, marketID, quality = C_BlackMarket.GetHotItem();
 	if ( name ) then
 		self.HotDeal.Name:SetText(name);
 		
@@ -80,6 +92,14 @@ function BlackMarketFrame_UpdateHotItem(self)
 			self.HotDeal.Item.IconTexture:SetVertexColor(1.0, 0.1, 0.1);
 		else
 			self.HotDeal.Item.IconTexture:SetVertexColor(1.0, 1.0, 1.0);
+		end
+
+		SetItemButtonQuality(self.HotDeal.Item, quality, link);
+
+		if (quality >= LE_ITEM_QUALITY_COMMON and BAG_ITEM_QUALITY_COLORS[quality]) then
+			self.HotDeal.Name:SetTextColor(BAG_ITEM_QUALITY_COLORS[quality].r, BAG_ITEM_QUALITY_COLORS[quality].g, BAG_ITEM_QUALITY_COLORS[quality].b);
+		else
+			self.HotDeal.Name:SetTextColor(1.0, 0.82, 0);
 		end
 
 		self.HotDeal.Item.Count:SetText(quantity);
@@ -114,6 +134,10 @@ end
 function BlackMarketScrollFrame_Update()
 	local numItems = C_BlackMarket.GetNumItems();
 	
+	if (not numItems) then
+		numItems = 0;
+	end
+	
 	local scrollFrame = BlackMarketScrollFrame;
 	local offset = HybridScrollFrame_GetOffset(scrollFrame);
 	local buttons = scrollFrame.buttons;
@@ -124,7 +148,7 @@ function BlackMarketScrollFrame_Update()
 		local index = offset + i; -- adjust index
 
 		if ( index <= numItems ) then
-			local name, texture, quantity, itemType, usable, level, levelType, sellerName, minBid, minIncrement, currBid, youHaveHighBid, numBids, timeLeft, link, marketID = C_BlackMarket.GetItemInfoByIndex(index);
+			local name, texture, quantity, itemType, usable, level, levelType, sellerName, minBid, minIncrement, currBid, youHaveHighBid, numBids, timeLeft, link, marketID, quality = C_BlackMarket.GetItemInfoByIndex(index);
 			
 			if ( name ) then
 				button.Name:SetText(name);
@@ -134,6 +158,14 @@ function BlackMarketScrollFrame_Update()
 					button.Item.IconTexture:SetVertexColor(1.0, 0.1, 0.1);
 				else
 					button.Item.IconTexture:SetVertexColor(1.0, 1.0, 1.0);
+				end
+
+				SetItemButtonQuality(button.Item, quality, link);
+
+				if (quality and quality >= LE_ITEM_QUALITY_COMMON and BAG_ITEM_QUALITY_COLORS[quality]) then
+					button.Name:SetTextColor(BAG_ITEM_QUALITY_COLORS[quality].r, BAG_ITEM_QUALITY_COLORS[quality].g, BAG_ITEM_QUALITY_COLORS[quality].b);
+				else
+					button.Name:SetTextColor(1.0, 0.82, 0);
 				end
 
 				button.Item.Count:SetText(quantity);

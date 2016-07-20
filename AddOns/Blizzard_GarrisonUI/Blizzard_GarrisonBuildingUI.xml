@@ -88,7 +88,7 @@
 					<TexCoords left="1.0" right="0.0" top="1.0" bottom="0.0"/>
 				</Texture>
 			</Layer>
-			<Layer level="BORDER" textureSubLevel="3">
+			<Layer level="BORDER" textureSubLevel="4">
 				<Texture atlas="_Garr_InfoBoxBorder-Top" horizTile="true" useAtlasSize="true">
 					<Anchors>
 						<Anchor point="TOPLEFT"/>
@@ -109,7 +109,7 @@
 					<TexCoords left="1.0" right="0.0" top="0.0" bottom="1.0"/>
 				</Texture>
 			</Layer>
-			<Layer level="BORDER" textureSubLevel="4">
+			<Layer level="BORDER" textureSubLevel="5">
 				<Texture atlas="Garr_InfoBoxBorder-Corner" useAtlasSize="true">
 					<Anchors>
 						<Anchor point="TOPLEFT"/>
@@ -620,7 +620,7 @@
 				</Layers>
 			</Frame>
 			
-			<Frame parentKey="FollowerList" inherits="GarrisonListTemplateHeader" name="$parentFollowers" hidden="true" frameStrata="HIGH">
+			<Frame parentKey="FollowerList" inherits="GarrisonListTemplateHeader" name="$parentFollowers" hidden="true" frameStrata="HIGH" mixin="GarrisonFollowerList">
 				<Size x="305" y="565"/>
 				<Anchors>
 					<Anchor point="BOTTOMLEFT" x="33" y="34"/>
@@ -654,6 +654,7 @@
 					</OnLoad>
 					<OnShow function="GarrisonBuildingFollowerList_OnShow"/>
 					<OnHide function="GarrisonBuildingFollowerList_OnHide"/>
+					<OnEvent method="OnEvent"/>
 				</Scripts>
 			</Frame>
 			<Frame parentKey="InfoBox" inherits="GarrisonInfoBoxFiligreeTemplate">
@@ -664,11 +665,11 @@
 				
 				<Animations>
 					<AnimationGroup parentKey="UpgradeAnim">
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="1"/>
-						<Alpha childKey="UpgradeGlow" change="-1.0" duration="0.9" order="2"/>
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="3"/>
-						<Alpha childKey="UpgradeGlow" change="-1.0" duration="0.9" order="4"/>
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="5"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="1"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="1" toAlpha="0" duration="0.9" order="2"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="3"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="1" toAlpha="0" duration="0.9" order="4"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="5"/>
 						<Scripts>
 							<OnPlay>
 								self:GetParent().UpgradeGlow:SetAlpha(0);
@@ -1076,11 +1077,11 @@
 				
 				<Animations>
 					<AnimationGroup parentKey="UpgradeAnim">
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="1"/>
-						<Alpha childKey="UpgradeGlow" change="-1.0" duration="0.9" order="2"/>
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="3"/>
-						<Alpha childKey="UpgradeGlow" change="-1.0" duration="0.9" order="4"/>
-						<Alpha childKey="UpgradeGlow" change="1.0" duration="0.9" order="5"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="1"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="1" toAlpha="0" duration="0.9" order="2"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="3"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="1" toAlpha="0" duration="0.9" order="4"/>
+						<Alpha childKey="UpgradeGlow" fromAlpha="0" toAlpha="1" duration="0.9" order="5"/>
 						<Scripts>
 							<OnPlay>
 								self:GetParent().UpgradeGlow:SetAlpha(0);

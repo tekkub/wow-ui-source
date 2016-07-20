@@ -43,7 +43,6 @@ ITEM_SEARCHBAR_LIST = {
 	"GuildItemSearchBox",
 	"VoidItemSearchBox",
 	"BankItemSearchBox",
-	"HeirloomsJournalSearchBox",
 };
 
 function BagSearch_OnHide(self)
@@ -101,47 +100,6 @@ function ScrollingEdit_OnCursorChanged(self, x, y, w, h)
 	self.cursorOffset = y;
 	self.cursorHeight = h;
 	self.handleCursorChange = true;
-end
-
--- NOTE: If your edit box never shows partial lines of text, then this function will not work when you use
--- your mouse to move the edit cursor. You need the edit box to cut lines of text so that you can use your
--- mouse to highlight those partially-seen lines; otherwise you won't be able to use the mouse to move the
--- cursor above or below the current scroll area of the edit box.
-function ScrollingEdit_OnUpdate(self, elapsed, scrollFrame)
-local height, range, scroll, size, cursorOffset;
-	if ( self.handleCursorChange ) then
-		if ( not scrollFrame ) then
-			scrollFrame = self:GetParent();
-		end
-		height = scrollFrame:GetHeight();
-		range = scrollFrame:GetVerticalScrollRange();
-		scroll = scrollFrame:GetVerticalScroll();
-		size = height + range;
-		cursorOffset = -self.cursorOffset;
-		
-		if ( math.floor(height) <= 0 or math.floor(range) <= 0 ) then
-			--Frame has no area, nothing to calculate.
-			return;
-		end
-		
-		while ( cursorOffset < scroll ) do
-			scroll = (scroll - (height / 2));
-			if ( scroll < 0 ) then
-				scroll = 0;
-			end
-			scrollFrame:SetVerticalScroll(scroll);
-		end
-
-		while ( (cursorOffset + self.cursorHeight) > (scroll + height) and scroll < range ) do
-			scroll = (scroll + (height / 2));
-			if ( scroll > range ) then
-				scroll = range;
-			end
-			scrollFrame:SetVerticalScroll(scroll);
-		end
-		
-		self.handleCursorChange = false;
-	end
 end
 
 UIFrameCache = CreateFrame("FRAME");
@@ -319,7 +277,6 @@ end
 
 function InputScrollFrame_OnLoad(self)
 	local scrollBar = self.ScrollBar;
-	scrollBar:SetFrameLevel(self.FocusButton:GetFrameLevel() + 2);
 	scrollBar:ClearAllPoints();
 	scrollBar:SetPoint("TOPLEFT", self, "TOPRIGHT", -13, -11);
 	scrollBar:SetPoint("BOTTOMLEFT", self, "BOTTOMRIGHT", -13, 9);
@@ -386,16 +343,4 @@ function SetCheckButtonIsRadio(button, isRadio)
 		button:SetDisabledCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check-Disabled");
 		button:GetDisabledCheckedTexture():SetTexCoord(0, 1, 0, 1);
 	end	
-end
-
----------------------------------------------------------------------------------
---- Follower Portrait                                                         ---
----------------------------------------------------------------------------------
-function GarrisonFollowerPortrait_Set(portrait, iconFileID)
-	if (iconFileID == nil or iconFileID == 0) then
-		-- unknown icon file ID; use the default silhouette portrait
-		portrait:SetTexture("Interface\\Garrison\\Portraits\\FollowerPortrait_NoPortrait");
-	else
-		portrait:SetToFileData(iconFileID);
-	end
 end

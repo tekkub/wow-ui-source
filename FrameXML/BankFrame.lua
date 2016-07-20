@@ -15,10 +15,9 @@ function BankFrameBaseButton_OnLoad (self)
 end
 
 function BankFrameItemButton_OnLoad (self) 
-	local container = self:GetParent():GetID();
 	BankFrameBaseButton_OnLoad (self);
 	self.SplitStack = function(button, split)
-		SplitContainerItem(container, button:GetID(), split);
+		SplitContainerItem(button:GetParent():GetID(), button:GetID(), split);
 	end
 end
 
@@ -78,7 +77,7 @@ function BankFrameItemButton_Update (button)
 	local texture = button.icon;
 	local inventoryID = button:GetInventorySlot();
 	local textureName = GetInventoryItemTexture("player",inventoryID);
-	local _, _, _, quality, _, _, _, isFiltered = GetContainerItemInfo(container, buttonID);
+	local _, _, _, quality, _, _, _, isFiltered, _, itemID = GetContainerItemInfo(container, buttonID);
 	local slotName = button:GetName();
 	local id;
 	local slotTextureName;
@@ -119,13 +118,8 @@ function BankFrameItemButton_Update (button)
 	else
 		button.searchOverlay:Hide();
 	end
-	
-	if (quality and quality > LE_ITEM_QUALITY_COMMON and BAG_ITEM_QUALITY_COLORS[quality]) then
-		button.IconBorder:Show();
-		button.IconBorder:SetVertexColor(BAG_ITEM_QUALITY_COLORS[quality].r, BAG_ITEM_QUALITY_COLORS[quality].g, BAG_ITEM_QUALITY_COLORS[quality].b);
-	else
-		button.IconBorder:Hide();
-	end
+
+	SetItemButtonQuality(button, quality, itemID);
 
 	BankFrameItemButton_UpdateLocked(button);
 	BankFrame_UpdateCooldown(container, button);
@@ -141,7 +135,7 @@ function BankFrame_UpdateCooldown(container, button)
 	else
 		start, duration, enable = GetContainerItemCooldown(container, button:GetID());
 	end
-	CooldownFrame_SetTimer(cooldown, start, duration, enable);
+	CooldownFrame_Set(cooldown, start, duration, enable);
 	if ( duration > 0 and enable == 0 ) then
 		SetItemButtonTextureVertexColor(button, 0.4, 0.4, 0.4);
 	end

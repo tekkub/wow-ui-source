@@ -1,6 +1,7 @@
-## Interface: 60100
+## Interface: 70000
 ## Title: Blizzard Auction UI
 ## Secure: 1
 ## LoadOnDemand: 1
+Blizzard_AuctionData.lua
 Blizzard_AuctionUI.xml
 Localization.lua

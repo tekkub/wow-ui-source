@@ -271,13 +271,13 @@ function UIDropDownMenu_AddButton(info, level)
 	
 	-- If not clickable then disable the button and set it white
 	if ( info.notClickable ) then
-		info.disabled = 1;
+		info.disabled = true;
 		button:SetDisabledFontObject(GameFontHighlightSmallLeft);
 	end
 
 	-- Set the text color and disable it if its a title
 	if ( info.isTitle ) then
-		info.disabled = 1;
+		info.disabled = true;
 		button:SetDisabledFontObject(GameFontNormalSmallLeft);
 	end
 	
@@ -446,6 +446,18 @@ function UIDropDownMenu_AddButton(info, level)
 
 
 	if not info.notCheckable then 
+		if ( info.disabled ) then
+			_G[listFrameName.."Button"..index.."Check"]:SetDesaturated(true);
+			_G[listFrameName.."Button"..index.."Check"]:SetAlpha(0.5);
+			_G[listFrameName.."Button"..index.."UnCheck"]:SetDesaturated(true);
+			_G[listFrameName.."Button"..index.."UnCheck"]:SetAlpha(0.5);
+		else
+			_G[listFrameName.."Button"..index.."Check"]:SetDesaturated(false);
+			_G[listFrameName.."Button"..index.."Check"]:SetAlpha(1);
+			_G[listFrameName.."Button"..index.."UnCheck"]:SetDesaturated(false);
+			_G[listFrameName.."Button"..index.."UnCheck"]:SetAlpha(1);
+		end
+
 		if info.isNotRadio then
 			_G[listFrameName.."Button"..index.."Check"]:SetTexCoord(0.0, 0.5, 0.0, 0.5);
 			_G[listFrameName.."Button"..index.."UnCheck"]:SetTexCoord(0.5, 1.0, 0.0, 0.5);
@@ -1001,6 +1013,9 @@ function UIDropDownMenu_OnHide(self)
 	end
 	CloseDropDownMenus(id+1);
 	OPEN_DROPDOWNMENUS[id] = nil;
+	if (id == 1) then
+		UIDROPDOWNMENU_OPEN_MENU = nil;
+	end
 end
 
 function UIDropDownMenu_SetWidth(frame, width, padding)

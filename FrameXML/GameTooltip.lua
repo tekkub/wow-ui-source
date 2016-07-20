@@ -203,6 +203,8 @@ function GameTooltip_OnHide(self)
 	self:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b);
 	self:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b);
 	self.default = nil;
+	self.overrideComparisonAnchorFrame = nil;
+	self.overrideComparisonAnchorSide = nil;
 	GameTooltip_ClearMoney(self);
 	GameTooltip_ClearStatusBars(self);
 	if ( self.shoppingTooltips ) then
@@ -217,7 +219,8 @@ function GameTooltip_CycleSecondaryComparedItem(self)
 	GameTooltip_AdvanceSecondaryCompareItem(self);
 
 	local shoppingTooltip1, shoppingTooltip2 = unpack(self.shoppingTooltips);
-	if ( shoppingTooltip1:IsShown() ) then		GameTooltip_ShowCompareItem(self);
+	if ( shoppingTooltip1:IsShown() ) then
+		GameTooltip_ShowCompareItem(self);
 	end
 end
 
@@ -259,9 +262,13 @@ function GameTooltip_AddNewbieTip(frame, normalText, r, g, b, newbieText, noNorm
 	end
 end
 
-function GameTooltip_ShowCompareItem(self)
+function GameTooltip_ShowCompareItem(self, anchorFrame)
 	if ( not self ) then
 		self = GameTooltip;
+	end
+	
+	if( not anchorFrame ) then
+		anchorFrame = self.overrideComparisonAnchorFrame or self;
 	end
 	
 	if ( self.needsReset ) then
@@ -274,25 +281,29 @@ function GameTooltip_ShowCompareItem(self)
 	
 	local primaryItemShown, secondaryItemShown = shoppingTooltip1:SetCompareItem(shoppingTooltip2, self);
 
-	local side = "left";
-	
-	-- find correct side
-	local rightDist = 0;
-	local leftPos = self:GetLeft();
-	local rightPos = self:GetRight();
-	if ( not rightPos ) then
-		rightPos = 0;
-	end
-	if ( not leftPos ) then
-		leftPos = 0;
-	end
+	local leftPos = anchorFrame:GetLeft();
+	local rightPos = anchorFrame:GetRight();
 
-	rightDist = GetScreenWidth() - rightPos;
-
-	if (leftPos and (rightDist < leftPos)) then
-		side = "left";
+	local side;
+	if ( self.overrideComparisonAnchorSide ) then
+		side = self.overrideComparisonAnchorSide;
 	else
-		side = "right";
+		-- find correct side
+		local rightDist = 0;
+		if ( not rightPos ) then
+			rightPos = 0;
+		end
+		if ( not leftPos ) then
+			leftPos = 0;
+		end
+
+		rightDist = GetScreenWidth() - rightPos;
+
+		if (leftPos and (rightDist < leftPos)) then
+			side = "left";
+		else
+			side = "right";
+		end
 	end
 
 	-- see if we should slide the tooltip
@@ -316,9 +327,9 @@ function GameTooltip_ShowCompareItem(self)
 		shoppingTooltip2:SetOwner(self, "ANCHOR_NONE");
 		shoppingTooltip2:ClearAllPoints();
 		if ( side and side == "left" ) then
-			shoppingTooltip2:SetPoint("TOPRIGHT", self, "TOPLEFT", 0, -10);
+			shoppingTooltip2:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", 0, -10);
 		else
-			shoppingTooltip2:SetPoint("TOPLEFT", self, "TOPRIGHT", 0, -10);
+			shoppingTooltip2:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, -10);
 		end
 		
 		shoppingTooltip1:SetOwner(self, "ANCHOR_NONE");
@@ -334,9 +345,9 @@ function GameTooltip_ShowCompareItem(self)
 		shoppingTooltip1:ClearAllPoints();
 		
 		if ( side and side == "left" ) then
-			shoppingTooltip1:SetPoint("TOPRIGHT", self, "TOPLEFT", 0, -10);
+			shoppingTooltip1:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", 0, -10);
 		else
-			shoppingTooltip1:SetPoint("TOPLEFT", self, "TOPRIGHT", 0, -10);
+			shoppingTooltip1:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, -10);
 		end
 
 		shoppingTooltip2:Hide();
@@ -396,4 +407,48 @@ end
 function GameTooltip_HideResetCursor()
 	GameTooltip:Hide();
 	ResetCursor();
+end
+
+function EmbeddedItemTooltip_OnTooltipSetItem(self)
+	if (not self.itemTextureSet) then
+		local _, _, _, _, _, _, _, _, _, itemTexture = GetItemInfo(self.id);
+		if (itemTexture) then
+			self.Icon:SetTexture(itemTexture);
+		end
+	end
+end
+
+
+function EmbeddedItemTooltip_SetItemByID(self, id)
+	self.id = id;
+	local itemName, _, quality, _, _, _, _, _, _, itemTexture = GetItemInfo(id);
+	self:Show();
+	self.Tooltip:SetOwner(self, "ANCHOR_NONE");
+	self.Tooltip:SetItemByID(id);
+	SetItemButtonQuality(self, quality, id);
+	SetItemButtonCount(self, 1);
+	self.Icon:SetTexture(itemTexture);
+	self.itemTextureSet = (itemTexture ~= nil);
+	self.Tooltip:SetPoint("TOPLEFT", self.Icon, "TOPRIGHT", 0, 10);
+	self.Tooltip:Show();
+end
+
+function EmbeddedItemTooltip_SetItemByQuestReward(self, questLogIndex, questID)
+	local itemName, itemTexture, quantity, quality, isUsable, itemID = GetQuestLogRewardInfo(questLogIndex, questID);
+	if itemName and itemTexture then
+		self.id = itemID;
+
+		self:Show();
+		self.Tooltip:SetOwner(self, "ANCHOR_NONE");
+		self.Tooltip:SetQuestLogItem("reward", questLogIndex, questID);
+		SetItemButtonQuality(self, quality, itemID);
+		SetItemButtonCount(self, quantity);
+		self.Icon:SetTexture(itemTexture);
+		self.itemTextureSet = (itemTexture ~= nil);
+		self.Tooltip:SetPoint("TOPLEFT", self.Icon, "TOPRIGHT", 0, 10);
+		self.Tooltip:Show();
+
+		return true;
+	end
+	return false;
 end

@@ -77,12 +77,18 @@ function DeathRecapFrame_OpenRecap( recapID )
 		dmgInfo.spellName = spellName;
 		if( not evtData.hideCaster ) then
 			dmgInfo.caster = evtData.sourceName or COMBATLOG_UNKNOWN_UNIT
+			dmgInfo.casterPrestige = evtData.casterPrestige;
 		else
 			dmgInfo.caster = nil;
+			dmgInfo.casterPrestige = nil;
 		end
 		dmgInfo.school = evtData.school;
 		
-		entry.SpellInfo.Caster:SetText(dmgInfo.caster);
+		if (dmgInfo.casterPrestige and dmgInfo.casterPrestige > 0) then
+			entry.SpellInfo.Caster:SetText(("|T%d:16:16:0:2|t %s"):format(GetPrestigeInfo(dmgInfo.casterPrestige) or 0, dmgInfo.caster));
+		else
+			entry.SpellInfo.Caster:SetText(dmgInfo.caster);
+		end
 		entry.SpellInfo.Name:SetText(spellName);
 		entry.SpellInfo.Icon:SetTexture(texture);		
 
@@ -114,20 +120,18 @@ end
 function DeathRecapFrame_Spell_OnEnter(self)
 	if ( self.spellId ) then 
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-		GameTooltip:SetMinimumWidth(256, true);
-		GameTooltip:SetSpellByID(self.spellId);
+		GameTooltip:SetSpellByID(self.spellId, false, false, false, -1, true);
 		GameTooltip:Show();
 	end
 end
 
 function DeathRecapFrame_Amount_OnEnter(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT");
-	GameTooltip:SetMinimumWidth(256, true);
 	GameTooltip:ClearLines();
 	if( self.amount ) then
 		local valueStr = self.school and format(TEXT_MODE_A_STRING_VALUE_SCHOOL, self.amount, CombatLog_String_SchoolString(self.school)) or
 						 self.amount;	
-		GameTooltip:AddLine(format(DEATH_RECAP_DAMAGE_TT, valueStr, self.dmgExtraStr), 1, 0, 0, true);
+		GameTooltip:AddLine(format(DEATH_RECAP_DAMAGE_TT, valueStr, self.dmgExtraStr), 1, 0, 0, false);
 	end
 	
 	if( self.spellName ) then

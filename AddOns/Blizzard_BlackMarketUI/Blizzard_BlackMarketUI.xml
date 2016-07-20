@@ -173,6 +173,15 @@
 							</Anchors>
 						</FontString>
 					</Layer>
+					<Layer level="OVERLAY">
+						<Texture parentKey="IconBorder" file="Interface\Common\WhiteIconFrame" hidden="true">
+							<Size x="34" y="34"/>
+							<Anchors>
+								<Anchor point="CENTER" x="0" y="0"/>
+							</Anchors>
+							<Color r="0" g="0.8" b="1"/>
+						</Texture>
+					</Layer>
 				</Layers>
 				<Scripts>
 					<OnEnter>
@@ -679,6 +688,15 @@
 									</Anchors>
 								</FontString>
 							</Layer>
+							<Layer level="OVERLAY">
+								<Texture parentKey="IconBorder" file="Interface\Common\WhiteIconFrame" hidden="true">
+									<Size x="35" y="35"/>
+									<Anchors>
+										<Anchor point="CENTER" x="0" y="0"/>
+									</Anchors>
+									<Color r="0" g="0.8" b="1"/>
+								</Texture>
+							</Layer>
 						</Layers>
 						<Scripts>
 							<OnEnter>
@@ -850,7 +868,7 @@
 				</Anchors>
 			</ScrollFrame>
 			<Frame parentKey="MoneyFrameBorder" inherits="ThinGoldEdgeTemplate">
-				<Size x="145" y="20"/>
+				<Size x="155" y="20"/>
 				<Anchors>
 					<Anchor point="BOTTOMLEFT" x="27" y="4"/>
 				</Anchors>

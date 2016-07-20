@@ -81,7 +81,7 @@ HelpFrameNavTbl[13] = {	text = KBASE_TOP_ISSUES,
 					};
 HelpFrameNavTbl[14] = {	text = HELP_TICKET_OPEN, -- HELP_TICKET_EDIT
 						icon ="Interface\\HelpFrame\\HelpIcon-OpenTicket",
-						frame = "ticket"
+						frame = "ticketHelp"
 					};
 					
 --THis needs implementing - CHaz
@@ -148,7 +148,6 @@ function HelpFrame_OnLoad(self)
 	self:RegisterEvent("GMSURVEY_DISPLAY");
 	self:RegisterEvent("GMRESPONSE_RECEIVED");
 	self:RegisterEvent("QUICK_TICKET_SYSTEM_STATUS");
-	self:RegisterEvent("ITEM_RESTORATION_BUTTON_STATUS");
 	self:RegisterEvent("QUICK_TICKET_THROTTLE_CHANGED");
 	self:RegisterEvent("SIMPLE_BROWSER_WEB_PROXY_FAILED");
 	self:RegisterEvent("SIMPLE_BROWSER_WEB_ERROR");
@@ -165,7 +164,6 @@ function HelpFrame_OnLoad(self)
 	self.Bg:SetVertTile(true);
 
 	HelpFrame_UpdateQuickTicketSystemStatus();
-	HelpFrame_UpdateItemRestorationButtonStatus();
 end
 
 function HelpFrame_OnShow(self)
@@ -222,7 +220,6 @@ function HelpFrame_OnEvent(self, event, ...)
 		-- If there are args then the player has a ticket
 		if ( category and ticketDescription ) then
 			-- Has an open ticket
-			HelpFrameOpenTicketEditBox:SetText(ticketDescription);
 			haveTicket = true;
 		else
 			-- the player does not have a ticket
@@ -232,7 +229,6 @@ function HelpFrame_OnEvent(self, event, ...)
 				TicketStatusFrame:Hide();
 			end
 		end
-		HelpFrame_SetTicketEntry();
 	elseif ( event == "GMRESPONSE_RECEIVED" ) then
 		local ticketDescription, response = ...;
 
@@ -247,19 +243,8 @@ function HelpFrame_OnEvent(self, event, ...)
 		TicketStatusTime:Hide();
 		TicketStatusFrame:Show();
 		TicketStatusFrame.hasGMSurvey = false;
-		HelpFrame_SetTicketButtonText(GM_RESPONSE_POPUP_VIEW_RESPONSE);
-		HelpFrameGMResponse_IssueText:SetText(ticketDescription);
-		HelpFrameGMResponse_GMText:SetText(response);
-		
-		-- update if at a ticket panel
-		if ( HelpFrame.selectedId == HELPFRAME_OPEN_TICKET or HelpFrame.selectedId == HELPFRAME_SUBMIT_TICKET ) then		
-			HelpFrame_SetFrameByKey(HELPFRAME_GM_RESPONSE);
-			HelpFrame_SetSelectedButton(HelpFrameButton6);
-		end
 	elseif ( event == "QUICK_TICKET_SYSTEM_STATUS" or event == "QUICK_TICKET_THROTTLE_CHANGED" ) then
 		HelpFrame_UpdateQuickTicketSystemStatus();
-	elseif ( event == "ITEM_RESTORATION_BUTTON_STATUS" ) then
-		HelpFrame_UpdateItemRestorationButtonStatus();
 	elseif ( event == "SIMPLE_BROWSER_WEB_PROXY_FAILED" ) then
 		StaticPopup_Show("WEB_PROXY_FAILED");
 	elseif ( event == "SIMPLE_BROWSER_WEB_ERROR" ) then
@@ -285,15 +270,6 @@ function HelpFrame_UpdateQuickTicketSystemStatus()
 	HelpFrame_UpdateSubsystemStatus(HELPFRAME_REPORT_ABUSE, GMEuropaComplaintsEnabled() and not GMQuickTicketSystemThrottled());
 	HelpFrame_UpdateSubsystemStatus(HELPFRAME_OPEN_TICKET, GMEuropaTicketsEnabled() and not GMQuickTicketSystemThrottled());
 	HelpFrame_UpdateSubsystemStatus(HELPFRAME_ACCOUNT_SECURITY, GMEuropaTicketsEnabled() and not GMQuickTicketSystemThrottled());
-end
-
-function HelpFrame_UpdateItemRestorationButtonStatus()
-	local enabled = GMItemRestorationButtonEnabled();
-	if ( enabled ) then
-		HelpFrameOpenTicketHelpItemRestoration:Show();
-	else
-		HelpFrameOpenTicketHelpItemRestoration:Hide();
-	end
 end
 
 function HelpFrame_ShowFrame(key)
@@ -336,7 +312,6 @@ end
 
 function HelpFrame_GMResponse_Acknowledge(markRead)
 	haveResponse = false;
-	HelpFrame_SetTicketEntry();
 	if ( markRead ) then
 		needMoreHelp = false;
 		GMResponseResolve();
@@ -352,11 +327,6 @@ end
 
 function HelpFrame_SetFrameByKey(key)
 	HelpBrowser:Hide();
-	-- if we're trying to open any ticket window and we have a GM response, override
-	if ( haveResponse and ( key == HELPFRAME_OPEN_TICKET or key == HELPFRAME_SUBMIT_TICKET ) ) then
-		key = HELPFRAME_GM_RESPONSE;
-		HelpFrame_SetSelectedButton(HelpFrameButton6);
-	end
 	local data = HelpFrameNavTbl[key];
 	if data.frame then
 		local showFrame = HelpFrame[data.frame];
@@ -393,25 +363,6 @@ function HelpFrame_SetTicketButtonText(text)
 	HelpFrame.ticketHelp.ticketButton:SetText(text);
 end
 
-function HelpFrame_SetTicketEntry()
-	-- don't do anything if we have a response
-	if ( not haveResponse ) then
-		local self = HelpFrame;
-		if ( haveTicket ) then
-			self.ticket.submitButton:SetText(EDIT_TICKET);
-			self.ticket.cancelButton:SetText(HELP_TICKET_ABANDON);
-			self.ticket.title:SetText(HELPFRAME_OPENTICKET_EDITTEXT);
-			HelpFrame_SetTicketButtonText(HELP_TICKET_EDIT);
-		else
-			HelpFrameOpenTicketEditBox:SetText("");
-			self.ticket.submitButton:SetText(SUBMIT);
-			self.ticket.cancelButton:SetText(CANCEL);
-			self.ticket.title:SetText(HELPFRAME_SUBMIT_TICKET_TITLE);
-			HelpFrame_SetTicketButtonText(HELP_TICKET_OPEN);
-		end
-	end
-end
-
 function HelpFrame_SetButtonEnabled(button, enabled)
 	if ( enabled ) then
 		button:Enable();
@@ -428,13 +379,22 @@ function HelpFrame_SetButtonEnabled(button, enabled)
 	end
 end
 
-function HelpFrame_ShowReportPlayerNameDialog(target)
+function HelpFrame_SetReportPlayerByUnitTag(frame, unitTag)
+	SetPendingReportTarget(unitTag);
+	frame.target = "pending";
+end
+
+function HelpFrame_SetReportPlayerByLineID(frame, lineID)
+	frame.target = "pending";
+end
+
+function HelpFrame_SetReportPlayerByBattlefieldScoreIndex(frame, battlefieldScoreIndex)
+	BattlefieldSetPendingReportTarget(battlefieldScoreIndex);
+	frame.target = "pending";
+end
+
+function HelpFrame_ShowReportPlayerNameDialog()
 	local frame = ReportPlayerNameDialog;
-	if ( type(target) == "string" ) then
-		SetPendingReportTarget(target);
-		target = "pending";
-	end
-	frame.target = target;
 	frame.reportType = nil;
 	frame.CommentFrame.EditBox:SetText("");
 	frame.CommentFrame.EditBox.InformationText:Show();
@@ -460,13 +420,8 @@ function HelpFrame_UpdateReportPlayerNameDialog()
 	end
 end
 
-function HelpFrame_ShowReportCheatingDialog(target)
+function HelpFrame_ShowReportCheatingDialog()
 	local frame = ReportCheatingDialog;
-	if ( type(target) == "string" ) then
-		SetPendingReportTarget(target);
-		target = "pending";
-	end
-	frame.target = target;
 	frame.CommentFrame.EditBox:SetText("");
 	frame.CommentFrame.EditBox.InformationText:Show();
 	StaticPopupSpecial_Show(frame);
@@ -484,7 +439,7 @@ function HelpFrameStuckHearthstone_Update(self)
 	local hearthstoneID = PlayerHasHearthstone();
 	local cooldown = self.Cooldown;
 	local start, duration, enable = GetItemCooldown(hearthstoneID or 0);
-	CooldownFrame_SetTimer(cooldown, start, duration, enable);
+	CooldownFrame_Set(cooldown, start, duration, enable);
 	if (not hearthstoneID or duration > 0 and enable == 0) then
 		self.IconTexture:SetVertexColor(0.4, 0.4, 0.4);
 	else
@@ -508,35 +463,21 @@ function HelpFrameStuckHearthstone_Update(self)
 end
 
 --
--- HelpFrameOpenTicket
+-- AccountSecurity
 --
 
-function HelpFrameOpenTicketCancel_OnClick()
-	GetGMTicket();
-	if haveTicket then
-		if not StaticPopup_Visible("HELP_TICKET_ABANDON_CONFIRM") then
-			StaticPopup_Show("HELP_TICKET_ABANDON_CONFIRM");
+function AccountSecurityOpenTicket_OnClick(self)
+	PlaySound("igMainMenuOptionCheckBoxOn");
+	if ( HelpBrowser:HasConnection() ) then
+		local data = HelpFrameNavTbl[self:GetID()];
+		if ( not data.noSelection ) then
+			HelpFrame_SetSelectedButton(self);
 		end
+		HelpFrame_SetFrameByKey(self:GetID());
 	else
-		HelpFrame_ShowFrame(HELPFRAME_OPEN_TICKET);
+		StaticPopup_Show("CONFIRM_LAUNCH_URL", nil, nil, {index = 6});
 	end
 end
-
-function HelpFrameOpenTicketSubmit_OnClick()
-	if ( needMoreHelp ) then
-		GMResponseNeedMoreHelp(HelpFrameOpenTicketEditBox:GetText());
-		needMoreHelp = false;
-	else
-		if ( haveTicket ) then
-			UpdateGMTicket(HelpFrameOpenTicketEditBox:GetText());
-		else
-			NewGMTicket(HelpFrameOpenTicketEditBox:GetText(), needResponse);
-			HelpOpenTicketButton.tutorial:Show();
-		end
-	end
-	HideUIPanel(HelpFrame);
-end
-
 
 --
 -- HelpFrameSubmitBug
@@ -844,13 +785,11 @@ end
 
 
 function TicketStatusFrame_OnShow(self)
-	BuffFrame:SetPoint("TOPRIGHT", self:GetParent(), "TOPRIGHT", -205, (-self:GetHeight()));
+	UIParent_UpdateTopFramePositions();
 end
 
 function TicketStatusFrame_OnHide(self)
-	if( not GMChatStatusFrame or not GMChatStatusFrame:IsShown() ) then
-		BuffFrame:SetPoint("TOPRIGHT", "UIParent", "TOPRIGHT", -205, -13);
-	end
+	UIParent_UpdateTopFramePositions();
 end
 
 

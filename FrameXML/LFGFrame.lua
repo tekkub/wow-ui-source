@@ -20,6 +20,7 @@ LFG_SUBTYPEID_HEROIC = 2;
 LFG_SUBTYPEID_RAID = 3;
 LFG_SUBTYPEID_SCENARIO = 4;
 LFG_SUBTYPEID_FLEXRAID = 5;
+LFG_SUBTYPEID_WORLDPVP = 6;
 
 LFG_ID_TO_ROLES = { "DAMAGER", "TANK", "HEALER" };
 LFG_RETURN_VALUES = {
@@ -58,6 +59,8 @@ LFG_INSTANCE_INVALID_CODES = { --Any other codes are unspecified conditions (e.g
 	nil,	--Wrong faction
 	"NO_VALID_ROLES",
     "ENGAGED_IN_PVP",
+    "NO_SPEC",
+	"CANNOT_RUN_ANY_CHILD_DUNGEON",
 	[1001] = "LEVEL_TOO_LOW",
 	[1002] = "LEVEL_TOO_HIGH",
 	[1022] = "QUEST_NOT_COMPLETED",
@@ -201,12 +204,15 @@ function LFGEventFrame_OnEvent(self, event, ...)
 		LFG_UpdateAllRoleCheckboxes();
 	elseif ( event == "LFG_PROPOSAL_UPDATE" ) then
 		LFGDungeonReadyPopup_Update();
+	elseif ( event == "LFG_UPDATE_RANDOM_INFO" ) then
+		LFG_UpdateFramesIfShown();
 	elseif ( event == "LFG_PROPOSAL_SHOW" ) then
 		LFGDungeonReadyPopup.closeIn = nil;
 		LFGDungeonReadyPopup:SetScript("OnUpdate", nil);
 		LFGDungeonReadyStatus_ResetReadyStates();
 		StaticPopupSpecial_Show(LFGDungeonReadyPopup);
 		PlaySound("ReadyCheck");
+		FlashClientIcon();
 	elseif ( event == "LFG_PROPOSAL_FAILED" ) then
 		LFGDungeonReadyPopup_OnFail();
 	elseif ( event == "LFG_PROPOSAL_SUCCEEDED" ) then
@@ -327,6 +333,7 @@ end
 function LFG_UpdateFramesIfShown()
 	if ( LFDParentFrame:IsVisible() ) then
 		LFDQueueFrame_Update();
+		LFDQueueFrameRandom_UpdateFrame();
 	end
 	if ( LFRParentFrame:IsVisible() ) then
 		LFRQueueFrame_Update();
@@ -723,7 +730,7 @@ function LFGDungeonReadyPopup_Update()
 			if ( not LFGDungeonReadyPopup:IsShown() or StaticPopup_IsLastDisplayedFrame(LFGDungeonReadyPopup) ) then
 				LFGDungeonReadyPopup:SetHeight(LFGDungeonReadyStatus:GetHeight());
 			end
-		elseif ( subtypeID == LFG_SUBTYPEID_SCENARIO or subtypeID == LFG_SUBTYPEID_FLEXRAID ) then
+		elseif ( subtypeID == LFG_SUBTYPEID_SCENARIO or subtypeID == LFG_SUBTYPEID_FLEXRAID or subtypeID == LFG_SUBTYPEID_WORLDPVP) then
 			LFGDungeonReadyDialog:Hide();
 			-- there may be solo scenarios
 			if ( numMembers > 1 ) then
@@ -902,18 +909,20 @@ function LFGDungeonReadyDialog_UpdateRewards(dungeonID, role)
 		end
 	end
 
-	for shortageIndex = 1, LFG_ROLE_NUM_SHORTAGE_TYPES do
-		local eligible, forTank, forHealer, forDamage, itemCount = GetLFGRoleShortageRewards(dungeonID, shortageIndex);
-		if ( eligible and ((role == "TANK" and forTank) or (role == "HEALER" and forHealer) or (role == "DAMAGER" and forDamage)) ) then
-			for rewardIndex=1, itemCount do
-				local frame = _G["LFGDungeonReadyDialogRewardsFrameReward"..frameID];
-				if ( not frame ) then
-					frame = CreateFrame("FRAME", "LFGDungeonReadyDialogRewardsFrameReward"..frameID, LFGDungeonReadyDialogRewardsFrame, "LFGDungeonReadyRewardTemplate");
-					frame:SetID(frameID);
-					LFD_MAX_REWARDS = frameID;
+	if ( not IsInGroup(LE_PARTY_CATEGORY_HOME) ) then
+		for shortageIndex = 1, LFG_ROLE_NUM_SHORTAGE_TYPES do
+			local eligible, forTank, forHealer, forDamage, itemCount = GetLFGRoleShortageRewards(dungeonID, shortageIndex);
+			if ( eligible and ((role == "TANK" and forTank) or (role == "HEALER" and forHealer) or (role == "DAMAGER" and forDamage)) ) then
+				for rewardIndex=1, itemCount do
+					local frame = _G["LFGDungeonReadyDialogRewardsFrameReward"..frameID];
+					if ( not frame ) then
+						frame = CreateFrame("FRAME", "LFGDungeonReadyDialogRewardsFrameReward"..frameID, LFGDungeonReadyDialogRewardsFrame, "LFGDungeonReadyRewardTemplate");
+						frame:SetID(frameID);
+						LFD_MAX_REWARDS = frameID;
+					end
+					LFGDungeonReadyDialogReward_SetReward(frame, dungeonID, rewardIndex, "shortage", shortageIndex);
+					frameID = frameID + 1;
 				end
-				LFGDungeonReadyDialogReward_SetReward(frame, dungeonID, rewardIndex, "shortage", shortageIndex);
-				frameID = frameID + 1;
 			end
 		end
 	end
@@ -1267,7 +1276,7 @@ function LFGRewardsFrame_UpdateFrame(parentFrame, dungeonID, background)
 	local difficulty;
 	local dungeonDescription;
 	local textureFilename;
-	local dungeonName, typeID, subtypeID,_,_,_,_,_,_,_,textureFilename,difficulty,_,dungeonDescription, isHoliday, bonusRepAmount = GetLFGDungeonInfo(dungeonID);
+	local dungeonName, typeID, subtypeID,_,_,_,_,_,_,_,textureFilename,difficulty,_,dungeonDescription, isHoliday, bonusRepAmount, _, isTimewalker = GetLFGDungeonInfo(dungeonID);
 	local isHeroic = difficulty > 0;
 	local isScenario = (subtypeID == LFG_SUBTYPEID_SCENARIO);
 	local doneToday, moneyAmount, moneyVar, experienceGained, experienceVar, numRewards, spellID = GetLFGDungeonRewards(dungeonID);
@@ -1305,7 +1314,12 @@ function LFGRewardsFrame_UpdateFrame(parentFrame, dungeonID, background)
 	end
 
 	local lastFrame = parentFrame.rewardsLabel;
-	if ( isHoliday ) then
+	if ( isTimewalker ) then
+		parentFrame.rewardsDescription:SetText(LFD_RANDOM_REWARD_EXPLANATION2);
+
+		parentFrame.title:SetText(LFG_TYPE_RANDOM_TIMEWALKER_DUNGEON);
+		parentFrame.description:SetText(LFD_TIMEWALKER_RANDOM_EXPLANATION);
+	elseif ( isHoliday ) then
 		if ( doneToday ) then
 			parentFrame.rewardsDescription:SetText(LFD_HOLIDAY_REWARD_EXPLANATION2);
 		else
@@ -1353,13 +1367,15 @@ function LFGRewardsFrame_UpdateFrame(parentFrame, dungeonID, background)
 		end
 	end
 	
-	for shortageIndex=1, LFG_ROLE_NUM_SHORTAGE_TYPES do
-		local eligible, forTank, forHealer, forDamage, itemCount = GetLFGRoleShortageRewards(dungeonID, shortageIndex);
-		if ( eligible and ((tankChecked and forTank) or (healerChecked and forHealer) or (damageChecked and forDamage)) ) then
-			for rewardIndex=1, itemCount do
-				local name, texture, numItems = GetLFGDungeonShortageRewardInfo(dungeonID, shortageIndex, rewardIndex);
-				lastFrame = LFGRewardsFrame_SetItemButton(parentFrame, dungeonID, itemButtonIndex, rewardIndex, name, texture, numItems, shortageIndex, forTank, forHealer, forDamage);
-				itemButtonIndex = itemButtonIndex + 1;
+	if ( not IsInGroup(LE_PARTY_CATEGORY_HOME) ) then
+		for shortageIndex=1, LFG_ROLE_NUM_SHORTAGE_TYPES do
+			local eligible, forTank, forHealer, forDamage, itemCount = GetLFGRoleShortageRewards(dungeonID, shortageIndex);
+			if ( eligible and ((tankChecked and forTank) or (healerChecked and forHealer) or (damageChecked and forDamage)) ) then
+				for rewardIndex=1, itemCount do
+					local name, texture, numItems = GetLFGDungeonShortageRewardInfo(dungeonID, shortageIndex, rewardIndex);
+					lastFrame = LFGRewardsFrame_SetItemButton(parentFrame, dungeonID, itemButtonIndex, rewardIndex, name, texture, numItems, shortageIndex, forTank, forHealer, forDamage);
+					itemButtonIndex = itemButtonIndex + 1;
+				end
 			end
 		end
 	end
@@ -1905,6 +1921,13 @@ function LFGDungeonList_SetHeaderCollapsed(button, dungeonList, hiddenByCollapse
 	end
 end
 
+function LFGDungeonList_DisableEntries()
+	LFGDungeonList_Setup();
+	for id,_ in pairs(LFGEnabledList) do
+		LFGDungeonList_SetDungeonEnabled(id, false);
+	end
+end
+
 function LFGDungeonList_SetDungeonEnabled(dungeonID, isEnabled)
 	SetLFGDungeonEnabled(dungeonID, isEnabled);
 	LFGEnabledList[dungeonID] = isEnabled;
@@ -2141,18 +2164,22 @@ function LFGDungeonListCheckButton_OnClick(button, category, dungeonList, hidden
 end
 
 function LFG_IsRandomDungeonDisplayable(id)
-	local name, typeID, subtypeID, minLevel, maxLevel, _, _, _, expansionLevel = GetLFGDungeonInfo(id);
+	local name, typeID, subtypeID, minLevel, maxLevel, _, _, _, expansionLevel, _, _, _, _, _, _, _, _, isTimewalker = GetLFGDungeonInfo(id);
 	local myLevel = UnitLevel("player");
-	return myLevel >= minLevel and myLevel <= maxLevel and EXPANSION_LEVEL >= expansionLevel;
+	return ((myLevel >= minLevel and myLevel <= maxLevel and EXPANSION_LEVEL >= expansionLevel) or isTimewalker);
 end
 
 function LFGRandomList_OnEnter(self)
 	local randomID = self.randomID;
-	local subtypeID = select(LFG_RETURN_VALUES.subtypeID, GetLFGDungeonInfo(randomID));
+	local _, _, subtypeID, _, _, _, _, _, _, _, _, _, _, _, _, _, _, isTimewalker = GetLFGDungeonInfo(randomID);
 
-	local titleText, emptyText, subText = INCLUDED_DUNGEONS, INCLUDED_DUNGEONS_EMPTY, INCLUDED_DUNGEONS_SUBTEXT;
-	if ( subtypeID == LFG_SUBTYPEID_SCENARIO ) then
+	local titleText, emptyText, subText;
+	if ( isTimewalker ) then
+		titleText, emptyText, subText = INCLUDED_DUNGEONS, INCLUDED_DUNGEONS_TIMEWALKER_EMPTY, nil;
+	elseif ( subtypeID == LFG_SUBTYPEID_SCENARIO ) then
 		titleText, emptyText, subText = INCLUDED_SCENARIOS, INCLUDED_SCENARIOS_EMPTY, INCLUDED_SCENARIOS_SUBTEXT;
+	else
+		titleText, emptyText, subText = INCLUDED_DUNGEONS, INCLUDED_DUNGEONS_EMPTY, INCLUDED_DUNGEONS_SUBTEXT;
 	end
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 	GameTooltip:SetText(titleText, 1, 1, 1);
@@ -2162,18 +2189,20 @@ function LFGRandomList_OnEnter(self)
 	if ( numDungeons == 0 ) then
 		GameTooltip:AddLine(emptyText, RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, true);
 	else
-		GameTooltip:AddLine(subText, nil, nil, nil, true);
+		if ( subText ) then
+			GameTooltip:AddLine(subText, nil, nil, nil, true);
+		end
 		GameTooltip:AddLine(" ");
 		for i=1, numDungeons do
 			local dungeonID = GetDungeonForRandomSlot(randomID, i);
-			local name, typeID, subtypeID, minLevel, maxLevel, recLevel, minRecLevel, maxRecLevel, expansionLevel, groupID, textureFilename, difficulty, maxPlayers, description, isHoliday = GetLFGDungeonInfo(dungeonID);
+			local name, typeID, subtypeID, minLevel, maxLevel, recLevel, minRecLevel, maxRecLevel, expansionLevel, groupID, textureFilename, difficulty, maxPlayers, description, isHoliday, _, _, isTimewalker = GetLFGDungeonInfo(dungeonID);
 			local rangeText;
 			if ( minLevel == maxLevel ) then
 				rangeText = format(LFD_LEVEL_FORMAT_SINGLE, minLevel);
 			else
 				rangeText = format(LFD_LEVEL_FORMAT_RANGE, minLevel, maxLevel);
 			end
-			local difficultyColor = GetQuestDifficultyColor(recLevel);
+			local difficultyColor = GetQuestDifficultyColor(isTimewalker and UnitLevel("player") or recLevel);
 			
 			local displayName = name;
 			if ( LFGLockList[dungeonID] ) then

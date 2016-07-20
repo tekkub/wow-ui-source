@@ -383,7 +383,7 @@
 						if ( GameLimitedMode_IsActive() ) then
 							local rLevel = GetRestrictedAccountData();
 							if UnitLevel("player") >= rLevel then
-								label = label.." "..RED_FONT_COLOR_CODE..GameLimitedMode_GetString("CAP_REACHED").."|r";
+								label = label.." "..RED_FONT_COLOR_CODE..CAP_REACHED_TRIAL.."|r";
 							end
 						end
 						
@@ -447,7 +447,7 @@
 						
 						TextStatusBar_Initialize(self);
 						self.textLockable = 1;
-						self.cvar = "playerStatusText";
+						self.cvar = "statusText";
 						self.cvarLabel = "STATUS_TEXT_PLAYER";
 						self.showPercentage = true;
 						self.prefix = HEALTH;
@@ -504,7 +504,7 @@
 					
 						TextStatusBar_Initialize(self);
 						self.textLockable = 1;
-						self.cvar = "playerStatusText";
+						self.cvar = "statusText";
 						self.cvarLabel = "STATUS_TEXT_PLAYER";
 						self.showPercentage = true;
 						self.tooltipAnchorPoint = "ANCHOR_RIGHT";

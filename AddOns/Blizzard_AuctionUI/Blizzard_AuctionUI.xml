@@ -126,16 +126,16 @@
 							<Anchors>
 								<Anchor point="TOPLEFT">
 									<Offset>
-										<AbsDimension x="80" y="-41"/>
+										<AbsDimension x="80" y="-38"/>
 									</Offset>
 								</Anchor>
 							</Anchors>
 						</FontString>
 						<FontString name="BrowseLevelText" inherits="GameFontHighlightSmall" text="LEVEL_RANGE">
 							<Anchors>
-								<Anchor point="BOTTOMLEFT" relativePoint="TOPLEFT">
+								<Anchor point="TOPLEFT">
 									<Offset>
-										<AbsDimension x="230" y="-47"/>
+										<AbsDimension x="230" y="-38"/>
 									</Offset>
 								</Anchor>
 							</Anchors>
@@ -348,7 +348,7 @@
 						</Layers>
 						<Scripts>
 							<OnVerticalScroll>
-								FauxScrollFrame_OnVerticalScroll(self, offset, BROWSE_FILTER_HEIGHT, AuctionFrameFilters_Update);
+								FauxScrollFrame_OnVerticalScroll(self, offset, BROWSE_FILTER_HEIGHT, function() AuctionFrameFilters_Update() end);
 							</OnVerticalScroll>
 						</Scripts>
 					</ScrollFrame>
@@ -406,9 +406,14 @@
 						</Anchors>
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString parentKey="BuyoutPrice" inherits="GameFontNormalLarge">
+								<FontString parentKey="BuyoutLabel" inherits="GameFontNormalLarge" text="TOKEN_CURRENT_BUYOUT_PRICE" justifyH="RIGHT">
 									<Anchors>
-										<Anchor point="BOTTOM" x="0" y="117"/>
+										<Anchor point="BOTTOMRIGHT"  relativePoint="BOTTOM" x="-2" y="117"/>
+									</Anchors>
+								</FontString>
+								<FontString parentKey="BuyoutPrice" inherits="NumberFontNormalLarge" justifyH="LEFT">
+									<Anchors>
+										<Anchor point="BOTTOMLEFT" relativePoint="BOTTOM" x="2" y="117"/>
 									</Anchors>
 								</FontString>
 							</Layer>
@@ -551,7 +556,7 @@
 														self.Logo:ClearAllPoints();
 														self.Logo:SetPoint("RIGHT", fontString, "LEFT", -2, 0);
 														if (GameLimitedMode_IsActive()) then
-															self.tooltip = GameLimitedMode_GetString("ERR_FEATURE_RESTRICTED");
+															self.tooltip = ERR_FEATURE_RESTRICTED_TRIAL;
 															self:Disable();
 														else
 															self.tooltip = nil;
@@ -729,7 +734,7 @@
 						<Scripts>
 							<OnLoad function="BrowseWowTokenResults_OnLoad"/>
 							<OnEvent function="BrowseWowTokenResults_OnEvent"/>
-							<OnShow function="BrowseWowTokenResults_Update"/>
+							<OnShow function="BrowseWowTokenResults_OnShow"/>
 						</Scripts>
 					</Frame>
 					<Button name="BrowseQualitySort" inherits="AuctionSortButtonTemplate" text="RARITY">
@@ -896,7 +901,7 @@
 						<Anchors>
 							<Anchor point="TOPLEFT" relativeTo="BrowseNameText" relativePoint="BOTTOMLEFT">
 								<Offset>
-									<AbsDimension x="3" y="-2"/>
+									<AbsDimension x="3" y="-5"/>
 								</Offset>
 							</Anchor>
 						</Anchors>
@@ -922,7 +927,7 @@
 						<Anchors>
 							<Anchor point="TOPLEFT" relativeTo="BrowseLevelText" relativePoint="BOTTOMLEFT">
 								<Offset>
-									<AbsDimension x="3" y="-6"/>
+									<AbsDimension x="3" y="-5"/>
 								</Offset>
 							</Anchor>
 						</Anchors>
@@ -974,9 +979,9 @@
 					</EditBox>
 					<Frame name="BrowseDropDown" inherits="UIDropDownMenuTemplate" id="1">
 						<Anchors>
-							<Anchor point="TOPLEFT" relativeTo="BrowseLevelText" relativePoint="BOTTOMRIGHT">
+							<Anchor point="TOPLEFT" relativeTo="BrowseMaxLevel" relativePoint="TOPRIGHT">
 								<Offset>
-									<AbsDimension x="-5" y="-1"/>
+									<AbsDimension x="-6" y="5"/>
 								</Offset>
 							</Anchor>
 						</Anchors>
@@ -1049,24 +1054,6 @@
 							<OnLeave function="GameTooltip_Hide"/>
 						</Scripts>
 					</CheckButton>
-					<Button name="BrowseSearchButton" inherits="UIPanelButtonTemplate" text="SEARCH">
-						<Size>
-							<AbsDimension x="80" y="22"/>
-						</Size>
-						<Anchors>
-							<Anchor point="TOPRIGHT">
-								<Offset>
-									<AbsDimension x="-18" y="-35"/>
-								</Offset>
-							</Anchor>
-						</Anchors>
-						<Scripts>
-							<OnClick>
-								AuctionFrameBrowse_Search();
-							</OnClick>
-							<OnUpdate function="BrowseSearchButton_OnUpdate"/>
-						</Scripts>
-					</Button>
 					<Button name="BrowseResetButton" inherits="UIPanelButtonTemplate" text="RESET">
 						<Size>
 							<AbsDimension x="80" y="22"/>
@@ -1077,6 +1064,20 @@
 						<Scripts>
 							<OnClick function="AuctionFrameBrowse_Reset"/>
 							<OnUpdate function="BrowseResetButton_OnUpdate"/>
+						</Scripts>
+					</Button>
+					<Button name="BrowseSearchButton" inherits="UIPanelButtonTemplate" text="SEARCH">
+						<Size>
+							<AbsDimension x="80" y="22"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPRIGHT" relativeTo="BrowseResetButton" relativePoint="TOPLEFT" x="-5" y="0"/>
+						</Anchors>
+						<Scripts>
+							<OnClick>
+								AuctionFrameBrowse_Search();
+							</OnClick>
+							<OnUpdate function="BrowseSearchButton_OnUpdate"/>
 						</Scripts>
 					</Button>
 					<Button name="BrowsePrevPageButton">
@@ -1826,6 +1827,14 @@
 								</Texture>
 							</Layer>
 							<Layer level="OVERLAY">
+								<Texture parentKey="IconBorder" file="Interface\Common\WhiteIconFrame" hidden="true">
+									<Size x="37" y="37"/>
+									<Anchors>
+										<Anchor point="CENTER"/>
+									</Anchors>
+								</Texture>
+							</Layer>
+							<Layer level="OVERLAY">
 								<FontString name="$parentCount" inherits="NumberFontNormal" justifyH="RIGHT" hidden="true">
 									<Anchors>
 										<Anchor point="BOTTOMRIGHT" x="-5" y="2"/>
@@ -2168,7 +2177,7 @@
 										<Anchor point="TOPLEFT" x="6" y="-28"/>
 									</Anchors>
 								</FontString>
-								<FontString parentKey="MarketPrice" inherits="GameFontHighlight" justifyH="LEFT">
+								<FontString parentKey="MarketPrice" inherits="NumberFontNormal" justifyH="LEFT">
 									<Anchors>
 										<Anchor point="TOPLEFT" relativeKey="$parent.BuyoutPriceLabel" relativePoint="BOTTOMLEFT" x="12" y="-6"/>
 									</Anchors>
@@ -2301,9 +2310,9 @@
 				PlaySound("AuctionWindowClose");
 				StaticPopup_Hide("BUYOUT_AUCTION");
 				StaticPopup_Hide("CANCEL_AUCTION");
+				WowTokenGameTimeTutorial:Hide();
 				CloseSideDressUpFrame(self);
 				SetAuctionsTabShowing(false);
-				AuctionWowToken_CancelUpdateTicker();
 				CloseAuctionHouse();
 			</OnHide>
 		</Scripts>
@@ -2378,12 +2387,12 @@
 				</Anchors>
 				<Scripts>
 					<OnLoad>
-						AuctionProgressBarSpark:Hide();
-						AuctionProgressBarFlash:Hide();
-						AuctionProgressBarIcon:Show();
-						AuctionProgressBarIcon:SetWidth(24);
-						AuctionProgressBarIcon:SetHeight(24);
-						AuctionProgressBarIcon:SetPoint("RIGHT", "$parent", "LEFT", -10, 2);
+						AuctionProgressBar.Spark:Hide();
+						AuctionProgressBar.Flash:Hide();
+						AuctionProgressBar.Icon:Show();
+						AuctionProgressBar.Icon:SetWidth(24);
+						AuctionProgressBar.Icon:SetHeight(24);
+						AuctionProgressBar.Icon:SetPoint("RIGHT", "$parent", "LEFT", -10, 2);
 					</OnLoad>
 					<OnEvent></OnEvent>
 					<OnShow></OnShow>

@@ -42,7 +42,7 @@ FRIENDS_TOOLTIP_MARGIN_WIDTH = 12;
 ADDFRIENDFRAME_WOWHEIGHT = 218;
 ADDFRIENDFRAME_BNETHEIGHT = 296;
 
-FRIEND_TABS_MAX_WIDTH = 0;		-- some locales may need to abbreviate tab headers to fit
+FRIEND_TABS_MAX_WIDTH = 280;
 
 local INVITE_RESTRICTION_NO_GAME_ACCOUNTS = 0;
 local INVITE_RESTRICTION_CLIENT = 1;
@@ -292,6 +292,7 @@ function FriendsFrame_OnShow()
 	FriendsList_Update(true);
 	FriendsFrame_Update();
 	UpdateMicroButtons();
+	FriendsFrame_CheckQuickJoinHelpTip();
 	PlaySound("igCharacterInfoTab");
 end
 
@@ -308,6 +309,7 @@ function FriendsFrame_Update()
 			FriendsFrame_ShowSubFrame("FriendsListFrame");
 		elseif ( FriendsTabHeader.selectedTab == 2 ) then
 			--Quick Join
+			FriendsFrameTitleText:SetText(QUICK_JOIN);
 			FriendsFrame_ShowSubFrame("QuickJoinFrame");
 		else
 			--Ignore
@@ -368,9 +370,7 @@ end
 
 function FriendsTabHeader_ClickTab(tab)
 	PanelTemplates_Tab_OnClick(tab, FriendsTabHeader);
-	if ( FRIEND_TABS_MAX_WIDTH > 0 ) then
-		FriendsTabHeader_ResizeTabs();
-	end
+	FriendsTabHeader_ResizeTabs();
 	FriendsFrame_Update();
 	PlaySound("igMainMenuOptionCheckBoxOn");
 end
@@ -381,7 +381,24 @@ function FriendsTabHeader_ResizeTabs()
 		return;
 	end
 
+	local currentWidth = 0;
+	local truncatedText = false;
+	for i = 1, FriendsTabHeader.numTabs do
+		local tab = _G["FriendsTabHeaderTab"..i];
+		currentWidth = currentWidth + tab:GetWidth();
+		if tab.Text:IsTruncated() then
+			truncatedText = true;
+		end
+	end
+	if ( not truncatedText and currentWidth <= FRIEND_TABS_MAX_WIDTH ) then
+		return;
+	end
+
 	local availableWidth = FRIEND_TABS_MAX_WIDTH;
+	if ( FriendsTabHeaderSoRButton:IsShown() ) then
+		availableWidth = availableWidth - 30;
+	end
+
 	local widthPerTab;
 
 	local currentTab = _G["FriendsTabHeaderTab"..selectedIndex];
@@ -1097,6 +1114,25 @@ function ToggleFriendsFrame(tab)
 	end
 end
 
+function FriendsFrame_CheckQuickJoinHelpTip()
+	-- We want at least two groups to show the tutorial.  This avoids more cases where all groups delist.
+	local hasEnoughGroups = #C_SocialQueue.GetAllGroups(false) > 1;
+	local hasClosedTutorial = GetCVarBitfield("closedInfoFrames", LE_FRAME_TUTORIAL_FRIENDS_LIST_QUICK_JOIN);
+	if ( not hasClosedTutorial and hasEnoughGroups ) then
+		FriendsFrame.FriendsTabHeader.FriendsFrameQuickJoinHelpTip:Show();
+	else
+		FriendsFrame.FriendsTabHeader.FriendsFrameQuickJoinHelpTip:Hide();
+	end
+end
+
+function FriendsFrame_CloseQuickJoinHelpTip()
+	-- Don't mark it as closed until you've actually seen it.
+	if ( FriendsFrame.FriendsTabHeader.FriendsFrameQuickJoinHelpTip:IsShown() or #C_SocialQueue.GetAllGroups(false) > 1 ) then
+		SetCVarBitfield("closedInfoFrames", LE_FRAME_TUTORIAL_FRIENDS_LIST_QUICK_JOIN, true);
+	end
+	FriendsFrame.FriendsTabHeader.FriendsFrameQuickJoinHelpTip:Hide();
+end
+
 function OpenFriendsFrame(tab)
 	if ( not tab ) then
 		ShowUIPanel(FriendsFrame);
@@ -1264,7 +1300,6 @@ function FriendsFrame_UpdateFriends()
 end
 
 function FriendsFrame_UpdateFriendButton(button)
-	local canInvite = FriendsFrame_HasInvitePermission();
 	local index = button.index;
 	button.buttonType = FriendListEntries[index].buttonType;
 	button.id = FriendListEntries[index].id;
@@ -1293,7 +1328,6 @@ function FriendsFrame_UpdateFriendButton(button)
 		end
 		infoText = area;
 		button.gameIcon:Hide();
-		button.socialQueueButton:Hide();
 		button.summonButton:ClearAllPoints();
 		button.summonButton:SetPoint("TOPRIGHT", button, "TOPRIGHT", 1, -1);
 		FriendsFrame_SummonButton_Update(button.summonButton);
@@ -1348,12 +1382,11 @@ function FriendsFrame_UpdateFriendButton(button)
 			--Note - this logic should match the logic in FriendsFrame_ShouldShowSummonButton
 
 			local shouldShowSummonButton = FriendsFrame_ShouldShowSummonButton(button.summonButton);
-			button.socialQueueButton:SetShown(false);
 			button.gameIcon:SetShown(not shouldShowSummonButton);
 
 			-- travel pass
 			hasTravelPassButton = true;
-			local restriction = FriendsFrame_GetInviteRestriction(button.id, canInvite);
+			local restriction = FriendsFrame_GetInviteRestriction(button.id);
 			if ( restriction == INVITE_RESTRICTION_NONE ) then
 				button.travelPassButton:Enable();
 			else
@@ -2110,6 +2143,15 @@ function FriendsFriendsFrame_Show(bnetIDAccount)
 	BNRequestFOFInfo(bnetIDAccount);
 end
 
+function FriendsFrame_InviteOrRequestToJoin(guid, gameAccountID)
+	local inviteType = GetDisplayedInviteType(guid);
+	if ( inviteType == "INVITE" or inviteType == "SUGGEST_INVITE" ) then
+		BNInviteFriend(gameAccountID);
+	elseif ( inviteType == "REQUEST_INVITE" ) then
+		BNRequestInviteFriend(gameAccountID);
+	end
+end
+
 function FriendsFrame_BattlenetInvite(button, bnetIDAccount)
 	-- no button means click from UnitPopup dropdown, find the friend index by bnetIDAccount
 	local index;
@@ -2124,15 +2166,17 @@ function FriendsFrame_BattlenetInvite(button, bnetIDAccount)
 			-- see if there is exactly one game account we could invite
 			local numValidGameAccounts = 0;
 			local lastGameAccountID;
+			local lastGameAccountGUID;
 			for i = 1, numGameAccounts do
-				local _, _, client, _, realmID, faction, race, class, _, _, level, _, _, _, _, bnetIDGameAccount = BNGetFriendGameAccountInfo(index, i);
+				local _, _, client, _, realmID, faction, race, class, _, _, level, _, _, _, _, bnetIDGameAccount, _, _, _, guid = BNGetFriendGameAccountInfo(index, i);
 				if ( client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 ) then
 					numValidGameAccounts = numValidGameAccounts + 1;
 					lastGameAccountID = bnetIDGameAccount;
+					lastGameAccountGUID = guid;
 				end
 			end
 			if ( numValidGameAccounts == 1 ) then
-				BNInviteFriend(lastGameAccountID);
+				FriendsFrame_InviteOrRequestToJoin(lastGameAccountGUID, lastGameAccountID);
 				return;
 			end
 
@@ -2163,7 +2207,8 @@ function FriendsFrame_BattlenetInvite(button, bnetIDAccount)
 		else
 			local bnetIDAccount, accountName, battleTag, isBattleTag, characterName, bnetIDGameAccount = BNGetFriendInfo(index);
 			if ( bnetIDGameAccount ) then
-				BNInviteFriend(bnetIDGameAccount);
+				local guid = select(20, BNGetGameAccountInfo(bnetIDGameAccount));
+				FriendsFrame_InviteOrRequestToJoin(guid, bnetIDGameAccount);
 			end
 		end	
 	end
@@ -2189,20 +2234,24 @@ function CanGroupWithAccount(bnetIDAccount)
 	if (not index) then
 		return false;
 	end
-	local restriction = FriendsFrame_GetInviteRestriction(index, FriendsFrame_HasInvitePermission());
+	local restriction = FriendsFrame_GetInviteRestriction(index);
 	return (restriction == INVITE_RESTRICTION_NONE);
 end
 
-function FriendsFrame_HasInvitePermission()
-	if ( IsInGroup() ) then
-		if ( not UnitIsGroupLeader("player") and not UnitIsGroupAssistant("player") ) then
-			return false;
+--Note that a single friend can have multiple GUIDs (if they're dual-boxing). This just gets one if there is one.
+function FriendsFrame_GetPlayerGUIDFromIndex(index)
+	local numGameAccounts = BNGetNumFriendGameAccounts(index);
+	for i = 1, numGameAccounts do
+		local guid = select(20, BNGetFriendGameAccountInfo(index, i));
+		if ( guid ) then
+			return guid;
 		end
 	end
-	return true;
+
+	return nil;
 end
 
-function FriendsFrame_GetInviteRestriction(index, canInvite)
+function FriendsFrame_GetInviteRestriction(index)
 	local restriction = INVITE_RESTRICTION_NO_GAME_ACCOUNTS;
 	local numGameAccounts = BNGetNumFriendGameAccounts(index);
 	for i = 1, numGameAccounts do
@@ -2212,8 +2261,6 @@ function FriendsFrame_GetInviteRestriction(index, canInvite)
 				restriction = max(INVITE_RESTRICTION_FACTION, restriction);
 			elseif ( realmID == 0 ) then
 				restriction = max(INVITE_RESTRICTION_INFO, restriction);
-			elseif ( not canInvite ) then
-				restriction = max(INVITE_RESTRICTION_LEADER, restriction);
 			else
 				-- there is at lease 1 game account that can be invited
 				return INVITE_RESTRICTION_NONE;
@@ -2241,33 +2288,40 @@ end
 
 function TravelPassButton_OnEnter(self)
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-	local canInvite = FriendsFrame_HasInvitePermission();
-	local restriction = FriendsFrame_GetInviteRestriction(self:GetParent().id, canInvite);
+	local restriction = FriendsFrame_GetInviteRestriction(self:GetParent().id);
 	if ( restriction == INVITE_RESTRICTION_NONE ) then
-		GameTooltip:SetText(TRAVEL_PASS_INVITE, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b, 1);
+		local guid = FriendsFrame_GetPlayerGUIDFromIndex(self:GetParent().id);
+		local inviteType = GetDisplayedInviteType(guid);
+		if ( inviteType == "INVITE" ) then
+			GameTooltip:SetText(TRAVEL_PASS_INVITE, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b);
+		elseif ( inviteType == "SUGGEST_INVITE" ) then
+			GameTooltip:SetText(SUGGEST_INVITE, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b);
+		else --inviteType == "REQUEST_INVITE"
+			GameTooltip:SetText(REQUEST_INVITE, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b);
+			--For REQUEST_INVITE, we'll display other members in the group if there are any.
+			local group = C_SocialQueue.GetGroupForPlayer(guid);
+			local members = C_SocialQueue.GetGroupMembers(group);
+			local numDisplayed = 0;
+			for i=1, #members do
+				if ( members[i] ~= guid ) then
+					if ( numDisplayed == 0 ) then
+						GameTooltip:AddLine(SOCIAL_QUEUE_ALSO_IN_GROUP);
+					elseif ( numDisplayed >= 7 ) then
+						GameTooltip:AddLine(SOCIAL_QUEUE_AND_MORE, GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b, 1);
+						break;
+					end
+					local name, color = SocialQueueUtil_GetNameAndColor(members[i]);
+					GameTooltip:AddLine(color..name..FONT_COLOR_CODE_CLOSE);
+
+					numDisplayed = numDisplayed + 1;
+				end
+			end
+		end
 	else
 		GameTooltip:SetText(TRAVEL_PASS_INVITE, GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b, 1);
 		GameTooltip:AddLine(FriendsFrame_GetInviteRestrictionText(restriction), RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, true);
-		GameTooltip:Show();
 	end
-end
-
-function FriendsSocialQueueButton_OnEnter(self)
-	local index = self:GetParent().index;
-	local buttonType = FriendListEntries[index].buttonType;
-	local guid;
-	local playerDisplayName;
-	if ( buttonType == FRIENDS_BUTTON_TYPE_WOW ) then
-		local name, level, class, area, connected, status, note, isRaF, playerGuid = GetFriendInfo(FriendListEntries[index].id);
-		guid = playerGuid;
-		playerDisplayName = string.format("%s%s%s", FRIENDS_WOW_NAME_COLOR_CODE, name, FONT_COLOR_CODE_CLOSE);
-	elseif ( buttonType == FRIENDS_BUTTON_TYPE_BNET ) then
-		local bnetIDAccount, accountName, battleTag, isBattleTag, characterName, bnetIDGameAccount, client, isOnline, lastOnline, isBnetAFK, isBnetDND, messageText, noteText, isRIDFriend, messageTime, canSoR = BNGetFriendInfo(FriendListEntries[index].id);
-		if ( isOnline ) then
-			guid = select(20, BNGetGameAccountInfo(bnetIDGameAccount));
-			playerDisplayName = string.format("%s%s (%s)%s", FRIENDS_BNET_NAME_COLOR_CODE, accountName, characterName, FONT_COLOR_CODE_CLOSE);
-		end
-	end
+	GameTooltip:Show();
 end
 
 function TravelPassDropDown_OnLoad(self)
@@ -2321,7 +2375,8 @@ function TravelPassDropDown_Initialize(self)
 end
 
 function TravelPassDropDown_OnClick(button, bnetIDGameAccount)
-	BNInviteFriend(bnetIDGameAccount);
+	local guid = select(20, BNGetGameAccountInfo(bnetIDGameAccount));
+	FriendsFrame_InviteOrRequestToJoin(guid, bnetIDGameAccount);
 end
 
 function BattleTagInviteFrame_Show(name)

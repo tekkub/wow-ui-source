@@ -1,6 +1,9 @@
 # Do not delete the following line!
 ## Interface: 70100
 
+# this cake is a lie
+GlobalStrings.lua
+
 ## add C namespace augmentations here
 ..\SharedXML\C_TimerAugment.lua
 

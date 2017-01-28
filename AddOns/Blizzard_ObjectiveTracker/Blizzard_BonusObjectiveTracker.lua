@@ -793,9 +793,11 @@ local function AddBonusObjectiveQuest(module, questID, posIndex, isTrackedWorldQ
 			module.headerText = TRACKER_HEADER_OBJECTIVE;
 		end
 
+		local questLogIndex = GetQuestLogIndexByID(questID);
+
 		QuestObjective_SetupHeader(block, OBJECTIVE_TRACKER_LINE_WIDTH - OBJECTIVE_TRACKER_DASH_WIDTH - BONUS_OBJECTIVE_LINE_DASH_OFFSET);
 		QuestObjectiveSetupBlockButton_FindGroup(block, questID);
-		QuestObjectiveSetupBlockButton_Item(block, GetQuestLogIndexByID(questID));
+		QuestObjectiveSetupBlockButton_Item(block, questLogIndex);
 
 		-- block header? add it as objectiveIndex 0
 		if ( taskName ) then
